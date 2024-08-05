@@ -27,12 +27,15 @@ package voucherroutes
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/jwtauth/v5"
 	"github.com/go-chi/render"
+	pfconfigmodel "github.com/rbaylon/srvcman/modules/pfconfig/model"
 	"github.com/rbaylon/srvcman/modules/security"
 	vouchermodel "github.com/rbaylon/srvcman/modules/vouchers/model"
 	"github.com/rbaylon/srvcman/utils"
@@ -65,12 +68,45 @@ func VoucherRouter(db vouchermodel.Crud) chi.Router {
 		}
 		render.JSON(w, r, voucher)
 	})
-	r.Get("/value/{voucher}", func(w http.ResponseWriter, r *http.Request) {
+	r.Get("/value/{voucher}/{ip}/{routerid}", func(w http.ResponseWriter, r *http.Request) {
 		val := chi.URLParam(r, "voucher")
 		voucher, err := db.GetByVoucherValue(val)
 		if err != nil {
-			render.Render(w, r, utils.ErrInvalidRequest(err, "DB error", http.StatusInternalServerError))
+			render.Render(w, r, utils.ErrInvalidRequest(err, "DB get error", http.StatusNotFound))
 			return
+		}
+		log.Println(val)
+		dbconn := db.GetDB()
+		pfdb := pfconfigmodel.New(dbconn)
+		pfc, err := pfdb.GetByRouterId(chi.URLParam(r, "routerid"))
+		if err != nil {
+			log.Println("Router: ", err)
+			render.Render(w, r, utils.ErrInvalidRequest(err, "DB get error: pfconfig ", http.StatusInternalServerError))
+			return
+		}
+		subip := chi.URLParam(r, "ip")
+		if voucher.Status == "available" && pfc != nil {
+			voucher.Status = "active"
+			voucher.DateStarted = time.Now()
+			voucher.DateEnd = voucher.DateStarted.Add(time.Hour * time.Duration(voucher.Hours))
+			voucher.DateExpires = voucher.DateEnd.Add(time.Hour * 120)
+			voucher.Ip = subip
+			voucher.PfconfigID = pfc.ID
+			err = db.Update(voucher)
+			if err != nil {
+				render.Render(w, r, utils.ErrInvalidRequest(err, "DB update error", http.StatusInternalServerError))
+				return
+			}
+			w.WriteHeader(http.StatusCreated)
+		}
+		if voucher.Status == "active" && voucher.Ip != subip {
+			voucher.Ip = subip
+			err = db.Update(voucher)
+			if err != nil {
+				render.Render(w, r, utils.ErrInvalidRequest(err, "DB update error", http.StatusInternalServerError))
+				return
+			}
+			w.WriteHeader(http.StatusAccepted)
 		}
 		render.JSON(w, r, voucher)
 	})

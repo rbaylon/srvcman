@@ -4,16 +4,27 @@ package vouchermodel
 import (
 	"log"
 	"net/http"
+	"time"
 
 	"gorm.io/gorm"
 )
 
 type Voucher struct {
 	gorm.Model
-	Value  string `json:"value" bson:"value"`
-	Type   string `json:"type" bson:"type"`
-	Hours  int    `json:"hours" bson:"hours"`
-	Status string `json:"status" bson:"status"`
+	Value         string    `json:"value"`
+	Type          string    `json:"type"`
+	Hours         int       `json:"hours"`
+	Status        string    `json:"status"`
+	Downspeed     int       `json:"downspeed"`
+	Upspeed       int       `json:"upspeed"`
+	Burstspeed    int       `json:"burstspeed"`
+	Duration      int       `json:"duration"`
+	Ip            string    `json:"ip"`
+	DateStarted   time.Time `json:"date_started"`
+	DateEnd       time.Time `json:"date_end"`
+	DateExpires   time.Time `json:"date_expires"`
+	HoursConsumed float64   `json:"hours_consumed"`
+	PfconfigID    uint      `json:"pfconfig_id"`
 }
 
 type Vouchers struct {
@@ -45,6 +56,7 @@ type Crud interface {
 	Update(voucher *Voucher) error
 	Delete(voucher *Voucher) error
 	GetByVoucherValue(value string) (*Voucher, error)
+	GetDB() *gorm.DB
 }
 
 type Storage struct {
@@ -63,6 +75,10 @@ func (s *Storage) AddBulk(vouchers []Voucher) error {
 		return result.Error
 	}
 	return nil
+}
+
+func (s *Storage) GetDB() *gorm.DB {
+	return s.DB
 }
 
 func (s *Storage) Add(voucher *Voucher) error {

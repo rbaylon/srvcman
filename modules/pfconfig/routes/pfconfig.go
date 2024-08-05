@@ -1,0 +1,129 @@
+// Package pfconfigroutes - Arkgate API Pfconfig module
+//
+//	Module Routes:
+//	  /api/v1/pfconfigs
+//	    Method: GET
+//	    Headers: Authorization Bearer
+//	    Return: JSON object with list of pfconfig objects
+//	    Return-Status: 200 on Success
+//	                   500 on Error
+//
+//	  /api/v1/pfconfigs/<pfconfigId>
+//	    Method: GET|PUT|DELETE
+//	    Headers: Authorization Bearer
+//	    Return: JSON pfconfig object ( exept for delete method )
+//	    Return-Status: 200 on Success
+//	                   500 on Error
+//	                   400 on Bad request
+//
+//	  /api/v1/pfconfigs/create
+//	    Method: POST
+//	    Headers: Authorization Bearer
+//	    Return: JSON pfconfig object ( exept for delete method )
+//	    Return-Status: 200 on Success
+//	                   500 on Error
+//	                   400 on Bad request
+package pfconfigroutes
+
+import (
+	"fmt"
+	"net/http"
+	"strconv"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/jwtauth/v5"
+	"github.com/go-chi/render"
+	pfconfigmodel "github.com/rbaylon/srvcman/modules/pfconfig/model"
+	"github.com/rbaylon/srvcman/modules/security"
+	"github.com/rbaylon/srvcman/utils"
+)
+
+var tokenAuth *jwtauth.JWTAuth
+
+func PfconfigRouter(db pfconfigmodel.Crud) chi.Router {
+	r := chi.NewRouter()
+	r.Use(security.TokenRequired)
+
+	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		res, errdb := db.GetAll()
+		if errdb != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(errdb, "DB error", http.StatusInternalServerError))
+			return
+		}
+		render.JSON(w, r, res)
+	})
+	r.Get("/{pfconfigId}", func(w http.ResponseWriter, r *http.Request) {
+		id, err := strconv.Atoi(chi.URLParam(r, "pfconfigId"))
+		if err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, fmt.Sprintf("Invalid pfconfig ID %s", chi.URLParam(r, "pfconfigId")), http.StatusBadRequest))
+			return
+		}
+		pfconfig, err := db.GetById(uint(id))
+		if err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "DB error", http.StatusInternalServerError))
+			return
+		}
+		render.JSON(w, r, pfconfig)
+	})
+	r.Get("/query/{routerid}", func(w http.ResponseWriter, r *http.Request) {
+		val := chi.URLParam(r, "routerid")
+		pfconfig, err := db.GetByRouterId(val)
+		if err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "DB get error", http.StatusInternalServerError))
+			return
+		}
+		render.JSON(w, r, pfconfig)
+	})
+	r.Put("/{pfconfigId}", func(w http.ResponseWriter, r *http.Request) {
+		id, err := strconv.Atoi(chi.URLParam(r, "pfconfigId"))
+		if err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, fmt.Sprintf("Invalid pfconfig ID %s", chi.URLParam(r, "pfconfigId")), http.StatusBadRequest))
+			return
+		}
+		pfconfig := pfconfigmodel.Pfconfig{}
+		if err = render.Bind(r, &pfconfig); err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "Bind error", http.StatusBadRequest))
+			return
+		}
+		pfconfig.ID = uint(id)
+		err = db.Update(&pfconfig)
+		if err == nil {
+			render.JSON(w, r, pfconfig)
+			return
+		}
+		render.Render(w, r, utils.ErrInvalidRequest(err, fmt.Sprintf("Error updating record for pfconfig  ID %s", chi.URLParam(r, "pfconfigId")), http.StatusBadRequest))
+	})
+	r.Post("/create", func(w http.ResponseWriter, r *http.Request) {
+		pfconfig := pfconfigmodel.Pfconfig{}
+		if err := render.Bind(r, &pfconfig); err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "Bind error", http.StatusBadRequest))
+			return
+		}
+		err := db.Add(&pfconfig)
+		if err == nil {
+			render.JSON(w, r, pfconfig)
+			return
+		}
+		render.Render(w, r, utils.ErrInvalidRequest(err, "DB error", http.StatusInternalServerError))
+	})
+	r.Delete("/{pfconfigId}", func(w http.ResponseWriter, r *http.Request) {
+		id, err := strconv.Atoi(chi.URLParam(r, "pfconfigId"))
+		if err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, fmt.Sprintf("Invalid pfconfig ID %s", chi.URLParam(r, "pfconfigId")), http.StatusBadRequest))
+			return
+		}
+		pfconfig := pfconfigmodel.Pfconfig{}
+		if err = render.Bind(r, &pfconfig); err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "Bind error", http.StatusBadRequest))
+			return
+		}
+		pfconfig.ID = uint(id)
+		err = db.Delete(&pfconfig)
+		if err == nil {
+			render.JSON(w, r, pfconfig)
+			return
+		}
+		render.Render(w, r, utils.ErrInvalidRequest(err, fmt.Sprintf("Error deleting record for pfconfig  ID %s", chi.URLParam(r, "pfconfigId")), http.StatusBadRequest))
+	})
+	return r
+}

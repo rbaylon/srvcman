@@ -12,10 +12,10 @@ import (
 
 type User struct {
 	gorm.Model
-	Username  string `json:"username" bson:"username" gorm:"unique;not null"`
-	Password  string `json:"password" bson:"password" gorm:"not null"`
-	Firstname string `json:"firstname" bson:"firstname" gorm:"not null"`
-	Lastname  string `json:"lastname" bson:"lastname" gorm:"not null"`
+	Username  string `json:"username" gorm:"unique;not null"`
+	Password  string `json:"password" gorm:"not null"`
+	Firstname string `json:"firstname" gorm:"not null"`
+	Lastname  string `json:"lastname" gorm:"not null"`
 }
 
 // MigrateDB - Create the table if not exist in DB

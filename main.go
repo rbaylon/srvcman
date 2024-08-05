@@ -22,6 +22,10 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
 	"github.com/rbaylon/srvcman/database"
+	pfconfigmodel "github.com/rbaylon/srvcman/modules/pfconfig/model"
+	pfconfigroutes "github.com/rbaylon/srvcman/modules/pfconfig/routes"
+	pfifacemodel "github.com/rbaylon/srvcman/modules/pfifaces/model"
+	pfifaceroutes "github.com/rbaylon/srvcman/modules/pfifaces/routes"
 	"github.com/rbaylon/srvcman/modules/security"
 	usermodel "github.com/rbaylon/srvcman/modules/users/model"
 	userroutes "github.com/rbaylon/srvcman/modules/users/routes"
@@ -45,9 +49,13 @@ func main() {
 	// Migrate tables
 	usermodel.MigrateDB(db)
 	vouchermodel.MigrateDB(db)
+	pfconfigmodel.MigrateDB(db)
+	pfifacemodel.MigrateDB(db)
 
 	userStore := usermodel.New(db)
 	voucherStore := vouchermodel.New(db)
+	pfconfigStore := pfconfigmodel.New(db)
+	pfifaceStore := pfifacemodel.New(db)
 
 	r := chi.NewRouter()
 	r.Use(render.SetContentType(render.ContentTypeJSON))
@@ -61,6 +69,8 @@ func main() {
 	// Mount the user sub-router:
 	r.Mount("/api/v1/users", userroutes.UserRouter(userStore))
 	r.Mount("/api/v1/vouchers", voucherroutes.VoucherRouter(voucherStore))
+	r.Mount("/api/v1/pfconfig", pfconfigroutes.PfconfigRouter(pfconfigStore))
+	r.Mount("/api/v1/pfiface", pfifaceroutes.PfifaceRouter(pfifaceStore))
 
 	http.ListenAndServe(fmt.Sprintf("%s:%s", app_ip, app_port), r)
 }
