@@ -27,6 +27,8 @@ import (
 	pfifacemodel "github.com/rbaylon/srvcman/modules/pfifaces/model"
 	pfifaceroutes "github.com/rbaylon/srvcman/modules/pfifaces/routes"
 	"github.com/rbaylon/srvcman/modules/security"
+	submodel "github.com/rbaylon/srvcman/modules/subs/model"
+	subroutes "github.com/rbaylon/srvcman/modules/subs/routes"
 	usermodel "github.com/rbaylon/srvcman/modules/users/model"
 	userroutes "github.com/rbaylon/srvcman/modules/users/routes"
 	vouchermodel "github.com/rbaylon/srvcman/modules/vouchers/model"
@@ -51,11 +53,13 @@ func main() {
 	vouchermodel.MigrateDB(db)
 	pfconfigmodel.MigrateDB(db)
 	pfifacemodel.MigrateDB(db)
+	submodel.MigrateDB(db)
 
 	userStore := usermodel.New(db)
 	voucherStore := vouchermodel.New(db)
 	pfconfigStore := pfconfigmodel.New(db)
 	pfifaceStore := pfifacemodel.New(db)
+	subsStore := submodel.New(db)
 
 	r := chi.NewRouter()
 	r.Use(render.SetContentType(render.ContentTypeJSON))
@@ -71,6 +75,7 @@ func main() {
 	r.Mount("/api/v1/vouchers", voucherroutes.VoucherRouter(voucherStore))
 	r.Mount("/api/v1/pfconfig", pfconfigroutes.PfconfigRouter(pfconfigStore))
 	r.Mount("/api/v1/pfiface", pfifaceroutes.PfifaceRouter(pfifaceStore))
+	r.Mount("/api/v1/subs", subroutes.SubRouter(subsStore))
 
 	http.ListenAndServe(fmt.Sprintf("%s:%s", app_ip, app_port), r)
 }
