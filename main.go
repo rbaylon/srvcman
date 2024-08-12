@@ -22,6 +22,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
 	"github.com/rbaylon/srvcman/database"
+	dhcpmodel "github.com/rbaylon/srvcman/modules/dhcps/model"
+	dhcproutes "github.com/rbaylon/srvcman/modules/dhcps/routes"
 	pfconfigmodel "github.com/rbaylon/srvcman/modules/pfconfig/model"
 	pfconfigroutes "github.com/rbaylon/srvcman/modules/pfconfig/routes"
 	pfifacemodel "github.com/rbaylon/srvcman/modules/pfifaces/model"
@@ -53,6 +55,7 @@ func main() {
 	vouchermodel.MigrateDB(db)
 	pfconfigmodel.MigrateDB(db)
 	pfifacemodel.MigrateDB(db)
+	dhcpmodel.MigrateDB(db)
 	submodel.MigrateDB(db)
 
 	userStore := usermodel.New(db)
@@ -60,6 +63,7 @@ func main() {
 	pfconfigStore := pfconfigmodel.New(db)
 	pfifaceStore := pfifacemodel.New(db)
 	subsStore := submodel.New(db)
+	dhcpStore := dhcpmodel.New(db)
 
 	r := chi.NewRouter()
 	r.Use(render.SetContentType(render.ContentTypeJSON))
@@ -76,6 +80,7 @@ func main() {
 	r.Mount("/api/v1/pfconfig", pfconfigroutes.PfconfigRouter(pfconfigStore))
 	r.Mount("/api/v1/pfiface", pfifaceroutes.PfifaceRouter(pfifaceStore))
 	r.Mount("/api/v1/subs", subroutes.SubRouter(subsStore))
+	r.Mount("/api/v1/dhcps", dhcproutes.DhcpRouter(dhcpStore))
 
 	http.ListenAndServe(fmt.Sprintf("%s:%s", app_ip, app_port), r)
 }

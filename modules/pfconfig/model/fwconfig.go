@@ -5,7 +5,9 @@ import (
 	"log"
 	"net/http"
 
+	dhcpmodel "github.com/rbaylon/srvcman/modules/dhcps/model"
 	pfifacemodel "github.com/rbaylon/srvcman/modules/pfifaces/model"
+	submodel "github.com/rbaylon/srvcman/modules/subs/model"
 	vouchermodel "github.com/rbaylon/srvcman/modules/vouchers/model"
 	"gorm.io/gorm"
 )
@@ -19,6 +21,8 @@ type Pfconfig struct {
 	CaptivePortalPort int                    `json:"captive_portal_port"`
 	Router            string                 `json:"router"`
 	Vouchers          []vouchermodel.Voucher `json:"vouchers"`
+	Dhcps             []dhcpmodel.Dhcp       `json:"dhcps"`
+	Subs              []submodel.Sub         `json:"subs"`
 }
 
 // MigrateDB - Create the table if not exist in DB
@@ -72,7 +76,7 @@ func (s *Storage) Add(pfconfig *Pfconfig) error {
 
 func (s *Storage) GetAll() ([]Pfconfig, error) {
 	var pfconfigs []Pfconfig
-	result := s.DB.Preload("Ifaces").Find(&pfconfigs)
+	result := s.DB.Find(&pfconfigs)
 	if result.Error != nil {
 		return nil, result.Error
 	}
@@ -81,7 +85,7 @@ func (s *Storage) GetAll() ([]Pfconfig, error) {
 
 func (s *Storage) GetById(id uint) (*Pfconfig, error) {
 	var pfconfig Pfconfig
-	result := s.DB.Preload("Ifaces").Preload("Vouchers").First(&pfconfig, id)
+	result := s.DB.Preload("Ifaces").Preload("Vouchers").Preload("Dhcps").Preload("Subs").First(&pfconfig, id)
 	if result.Error != nil {
 		return nil, result.Error
 	}
@@ -90,7 +94,7 @@ func (s *Storage) GetById(id uint) (*Pfconfig, error) {
 
 func (s *Storage) GetByRouterId(value string) (*Pfconfig, error) {
 	var pfconfig Pfconfig
-	result := s.DB.Where("Router = ?", value).Preload("Ifaces").Preload("Vouchers").First(&pfconfig)
+	result := s.DB.Where("Router = ?", value).Preload("Ifaces").Preload("Vouchers").Preload("Dhcps").Preload("Subs").First(&pfconfig)
 	if result.Error != nil {
 		return nil, result.Error
 	}

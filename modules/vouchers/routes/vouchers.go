@@ -37,6 +37,7 @@ import (
 	"github.com/go-chi/render"
 	pfconfigmodel "github.com/rbaylon/srvcman/modules/pfconfig/model"
 	"github.com/rbaylon/srvcman/modules/security"
+	submodel "github.com/rbaylon/srvcman/modules/subs/model"
 	vouchermodel "github.com/rbaylon/srvcman/modules/vouchers/model"
 	"github.com/rbaylon/srvcman/utils"
 )
@@ -71,12 +72,27 @@ func VoucherRouter(db vouchermodel.Crud) chi.Router {
 	r.Get("/value/{voucher}/{ip}/{routerid}", func(w http.ResponseWriter, r *http.Request) {
 		val := chi.URLParam(r, "voucher")
 		voucher, err := db.GetByVoucherValue(val)
+		dbconn := db.GetDB()
+		subsdb := submodel.New(dbconn)
 		if err != nil {
-			render.Render(w, r, utils.ErrInvalidRequest(err, "DB get error", http.StatusNotFound))
+			log.Println("Voucher not found, checking subs")
+			sbinfo, err := subsdb.GetByMacPrefix(val)
+			if err != nil {
+				log.Println("Voucher or sub not found")
+				render.Render(w, r, utils.ErrInvalidRequest(err, "DB get error", http.StatusNotFound))
+				return
+			}
+			sbinfo.Status = "active"
+			err = subsdb.Update(sbinfo)
+			if err != nil {
+				render.Render(w, r, utils.ErrInvalidRequest(err, "DB subs update error", http.StatusNotFound))
+				return
+			}
+			w.WriteHeader(http.StatusAccepted)
+			render.JSON(w, r, sbinfo)
 			return
 		}
 		log.Println(val)
-		dbconn := db.GetDB()
 		pfdb := pfconfigmodel.New(dbconn)
 		pfc, err := pfdb.GetByRouterId(chi.URLParam(r, "routerid"))
 		if err != nil {

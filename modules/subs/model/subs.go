@@ -2,21 +2,28 @@
 package submodel
 
 import (
+	"fmt"
 	"log"
 	"net/http"
+	"strings"
 
 	"gorm.io/gorm"
 )
 
 type Sub struct {
 	gorm.Model
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
-	FramedIp  string `json:"framed_ip"`
-	Type      string `json:"type"`
-	Status    string `json:"status"`
-	Mac       string `json:"mac"`
-	Loc       string `json:"loc"`
+	FirstName  string `json:"first_name"`
+	LastName   string `json:"last_name"`
+	FramedIp   string `json:"framed_ip"`
+	Type       string `json:"type"`
+	Status     string `json:"status"`
+	Mac        string `json:"mac"`
+	Loc        string `json:"loc"`
+	Downspeed  int    `json:"downspeed"`
+	Upspeed    int    `json:"upspeed"`
+	Burstspeed int    `json:"burstspeed"`
+	Duration   int    `json:"duration"`
+	PfconfigID uint   `json:"pfconfig_id"`
 }
 
 // MigrateDB - Create the table if not exist in DB
@@ -39,6 +46,7 @@ type Crud interface {
 	Update(sub *Sub) error
 	Delete(sub *Sub) error
 	GetByMac(mac string) (*Sub, error)
+	GetByMacPrefix(macprefix string) (*Sub, error)
 	GetDB() *gorm.DB
 }
 
@@ -89,6 +97,20 @@ func (s *Storage) GetByMac(mac string) (*Sub, error) {
 		return nil, result.Error
 	}
 	return &sub, nil
+}
+
+func (s *Storage) GetByMacPrefix(macprefix string) (*Sub, error) {
+	var sub Sub
+	if macprefix != "" {
+		mac := strings.Split(macprefix, "")
+		newmac := fmt.Sprintf("%s:%s:%s:%s", strings.Join(mac[0:2], ""), strings.Join(mac[2:4], ""), strings.Join(mac[4:6], ""), strings.Join(mac[6:8], ""))
+		result := s.DB.Where("Mac LIKE ?", "%"+newmac+"%").First(&sub)
+		if result.Error != nil {
+			return nil, result.Error
+		}
+		return &sub, nil
+	}
+	return nil, fmt.Errorf("Prefix empty")
 }
 
 func (s *Storage) Update(sub *Sub) error {
