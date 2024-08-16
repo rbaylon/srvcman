@@ -23,6 +23,7 @@ type Sub struct {
 	Upspeed    int    `json:"upspeed"`
 	Burstspeed int    `json:"burstspeed"`
 	Duration   int    `json:"duration"`
+	Gateway    string `json:"gateway"`
 	PfconfigID uint   `json:"pfconfig_id"`
 }
 

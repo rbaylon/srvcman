@@ -24,6 +24,7 @@ type Voucher struct {
 	DateEnd       time.Time `json:"date_end"`
 	DateExpires   time.Time `json:"date_expires"`
 	HoursConsumed float64   `json:"hours_consumed"`
+	Gateway       string    `json:"gateway"`
 	PfconfigID    uint      `json:"pfconfig_id"`
 }
 
