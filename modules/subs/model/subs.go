@@ -25,6 +25,7 @@ type Sub struct {
 	Burstspeed  int       `json:"burstspeed"`
 	Duration    int       `json:"duration"`
 	Gateway     string    `json:"gateway"`
+	Priority    int       `json:"priority"`
 	DateEnd     time.Time `json:"date_end"`
 	DateExpires time.Time `json:"date_expires"`
 	PfconfigID  uint      `json:"pfconfig_id"`

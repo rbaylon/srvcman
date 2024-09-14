@@ -28,6 +28,8 @@ import (
 	pfconfigroutes "github.com/rbaylon/srvcman/modules/pfconfig/routes"
 	pfifacemodel "github.com/rbaylon/srvcman/modules/pfifaces/model"
 	pfifaceroutes "github.com/rbaylon/srvcman/modules/pfifaces/routes"
+	runtimemodel "github.com/rbaylon/srvcman/modules/runtimes/model"
+	runtimeroutes "github.com/rbaylon/srvcman/modules/runtimes/routes"
 	"github.com/rbaylon/srvcman/modules/security"
 	submodel "github.com/rbaylon/srvcman/modules/subs/model"
 	subroutes "github.com/rbaylon/srvcman/modules/subs/routes"
@@ -57,6 +59,7 @@ func main() {
 	pfifacemodel.MigrateDB(db)
 	dhcpmodel.MigrateDB(db)
 	submodel.MigrateDB(db)
+	runtimemodel.MigrateDB(db)
 
 	userStore := usermodel.New(db)
 	voucherStore := vouchermodel.New(db)
@@ -64,6 +67,7 @@ func main() {
 	pfifaceStore := pfifacemodel.New(db)
 	subsStore := submodel.New(db)
 	dhcpStore := dhcpmodel.New(db)
+	rtStore := runtimemodel.New(db)
 
 	r := chi.NewRouter()
 	r.Use(render.SetContentType(render.ContentTypeJSON))
@@ -81,6 +85,7 @@ func main() {
 	r.Mount("/api/v1/pfiface", pfifaceroutes.PfifaceRouter(pfifaceStore))
 	r.Mount("/api/v1/subs", subroutes.SubRouter(subsStore))
 	r.Mount("/api/v1/dhcps", dhcproutes.DhcpRouter(dhcpStore))
+	r.Mount("/api/v1/runtime", runtimeroutes.RuntimeRouter(rtStore))
 
 	http.ListenAndServe(fmt.Sprintf("%s:%s", app_ip, app_port), r)
 }

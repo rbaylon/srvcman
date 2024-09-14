@@ -27,12 +27,14 @@ package subroutes
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/jwtauth/v5"
 	"github.com/go-chi/render"
+	runtimemodel "github.com/rbaylon/srvcman/modules/runtimes/model"
 	"github.com/rbaylon/srvcman/modules/security"
 	submodel "github.com/rbaylon/srvcman/modules/subs/model"
 	"github.com/rbaylon/srvcman/utils"
@@ -79,6 +81,15 @@ func SubRouter(db submodel.Crud) chi.Router {
 		sub.ID = uint(id)
 		errupdate := db.Update(sub)
 		if errupdate == nil {
+			dbconn := db.GetDB()
+			rtdb := runtimemodel.New(dbconn)
+			rt := &runtimemodel.Runtime{}
+			rt.Action = "updatepf"
+			rt.Status = "active"
+			err := rtdb.Add(rt)
+			if err != nil {
+				log.Println("update pf failed")
+			}
 			render.JSON(w, r, sub)
 			return
 		}
@@ -92,6 +103,15 @@ func SubRouter(db submodel.Crud) chi.Router {
 		}
 		erradd := db.Add(sub)
 		if erradd == nil {
+			dbconn := db.GetDB()
+			rtdb := runtimemodel.New(dbconn)
+			rt := &runtimemodel.Runtime{}
+			rt.Action = "updatepf"
+			rt.Status = "active"
+			err := rtdb.Add(rt)
+			if err != nil {
+				log.Println("update pf failed")
+			}
 			render.JSON(w, r, sub)
 			return
 		}
