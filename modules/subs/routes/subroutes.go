@@ -95,6 +95,43 @@ func SubRouter(db submodel.Crud) chi.Router {
 		}
 		render.Render(w, r, utils.ErrInvalidRequest(errupdate, fmt.Sprintf("Error updating record for sub  ID %s", chi.URLParam(r, "subId")), http.StatusBadRequest))
 	})
+	r.Get("/activate/{ip}/{status}", func(w http.ResponseWriter, r *http.Request) {
+		ip := chi.URLParam(r, "ip")
+		status := chi.URLParam(r, "status")
+		sub, err := db.GetByIp(ip)
+		if err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "DB error", http.StatusInternalServerError))
+			return
+		}
+		sub.Status = status
+		if status == "active" {
+			sub.LaterCount += 1
+		}
+		err = db.Update(sub)
+		if err == nil {
+			dbconn := db.GetDB()
+			rtdb := runtimemodel.New(dbconn)
+			rt := &runtimemodel.Runtime{}
+			rt.Action = "updatepf"
+			rt.Status = "active"
+			err := rtdb.Add(rt)
+			if err != nil {
+				log.Println("update pf failed")
+			}
+		} else {
+			log.Println("update user status failed")
+		}
+		render.JSON(w, r, sub)
+	})
+	r.Get("/getbyip/{ip}", func(w http.ResponseWriter, r *http.Request) {
+		ip := chi.URLParam(r, "ip")
+		sub, err := db.GetByIp(ip)
+		if err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "DB error", http.StatusInternalServerError))
+			return
+		}
+		render.JSON(w, r, sub)
+	})
 	r.Post("/create", func(w http.ResponseWriter, r *http.Request) {
 		sub := &submodel.Sub{}
 		if err := render.Bind(r, sub); err != nil {

@@ -29,6 +29,8 @@ type Sub struct {
 	DateEnd     time.Time `json:"date_end"`
 	DateExpires time.Time `json:"date_expires"`
 	PfconfigID  uint      `json:"pfconfig_id"`
+	DueDay      int       `json:"due_day"`
+	LaterCount  int       `json:"later_count"`
 }
 
 // MigrateDB - Create the table if not exist in DB
@@ -47,6 +49,7 @@ func (a *Sub) Bind(r *http.Request) error {
 type Crud interface {
 	GetAll() ([]Sub, error)
 	GetById(uid uint) (*Sub, error)
+	GetByIp(ip string) (*Sub, error)
 	Add(sub *Sub) error
 	Update(sub *Sub) error
 	Delete(sub *Sub) error
@@ -98,6 +101,15 @@ func (s *Storage) GetById(id uint) (*Sub, error) {
 func (s *Storage) GetByMac(mac string) (*Sub, error) {
 	var sub Sub
 	result := s.DB.Where("Mac = ?", mac).First(&sub)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return &sub, nil
+}
+
+func (s *Storage) GetByIp(ip string) (*Sub, error) {
+	var sub Sub
+	result := s.DB.Where("framed_ip = ?", ip).First(&sub)
 	if result.Error != nil {
 		return nil, result.Error
 	}

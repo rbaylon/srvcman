@@ -24,6 +24,8 @@ import (
 	"github.com/rbaylon/srvcman/database"
 	dhcpmodel "github.com/rbaylon/srvcman/modules/dhcps/model"
 	dhcproutes "github.com/rbaylon/srvcman/modules/dhcps/routes"
+	paymentmodel "github.com/rbaylon/srvcman/modules/payments/model"
+	paymentroutes "github.com/rbaylon/srvcman/modules/payments/routes"
 	pfconfigmodel "github.com/rbaylon/srvcman/modules/pfconfig/model"
 	pfconfigroutes "github.com/rbaylon/srvcman/modules/pfconfig/routes"
 	pfifacemodel "github.com/rbaylon/srvcman/modules/pfifaces/model"
@@ -33,6 +35,8 @@ import (
 	"github.com/rbaylon/srvcman/modules/security"
 	submodel "github.com/rbaylon/srvcman/modules/subs/model"
 	subroutes "github.com/rbaylon/srvcman/modules/subs/routes"
+	tunnelmodel "github.com/rbaylon/srvcman/modules/tunnels/model"
+	tunnelroutes "github.com/rbaylon/srvcman/modules/tunnels/routes"
 	usermodel "github.com/rbaylon/srvcman/modules/users/model"
 	userroutes "github.com/rbaylon/srvcman/modules/users/routes"
 	vouchermodel "github.com/rbaylon/srvcman/modules/vouchers/model"
@@ -60,6 +64,8 @@ func main() {
 	dhcpmodel.MigrateDB(db)
 	submodel.MigrateDB(db)
 	runtimemodel.MigrateDB(db)
+	paymentmodel.MigrateDB(db)
+	tunnelmodel.MigrateDB(db)
 
 	userStore := usermodel.New(db)
 	voucherStore := vouchermodel.New(db)
@@ -68,6 +74,8 @@ func main() {
 	subsStore := submodel.New(db)
 	dhcpStore := dhcpmodel.New(db)
 	rtStore := runtimemodel.New(db)
+	paymentStore := paymentmodel.New(db)
+	tunnelStore := tunnelmodel.New(db)
 
 	r := chi.NewRouter()
 	r.Use(render.SetContentType(render.ContentTypeJSON))
@@ -86,6 +94,8 @@ func main() {
 	r.Mount("/api/v1/subs", subroutes.SubRouter(subsStore))
 	r.Mount("/api/v1/dhcps", dhcproutes.DhcpRouter(dhcpStore))
 	r.Mount("/api/v1/runtime", runtimeroutes.RuntimeRouter(rtStore))
+	r.Mount("/api/v1/payments", paymentroutes.PaymentRouter(paymentStore))
+	r.Mount("/api/v1/tunnels", tunnelroutes.TunnelRouter(tunnelStore))
 
 	http.ListenAndServe(fmt.Sprintf("%s:%s", app_ip, app_port), r)
 }
