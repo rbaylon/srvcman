@@ -1,4 +1,4 @@
-module github.com/rbaylon/srvman
+module github.com/rbaylon/srvcman
 
 go 1.21.1
 

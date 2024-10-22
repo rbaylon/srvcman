@@ -105,6 +105,9 @@ func SubRouter(db submodel.Crud) chi.Router {
 		}
 		sub.Status = status
 		if status == "active" {
+			if sub.LaterCount > 20 {
+				sub.Status = "inactive"
+			}
 			sub.LaterCount += 1
 		}
 		err = db.Update(sub)
