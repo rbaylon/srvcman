@@ -6,31 +6,29 @@ import (
 	"log"
 	"net/http"
 	"strings"
-	"time"
 
 	"gorm.io/gorm"
 )
 
 type Sub struct {
 	gorm.Model
-	FirstName   string    `json:"first_name"`
-	LastName    string    `json:"last_name"`
-	FramedIp    string    `json:"framed_ip"`
-	Type        string    `json:"type"`
-	Status      string    `json:"status"`
-	Mac         string    `json:"mac"`
-	Loc         string    `json:"loc"`
-	Downspeed   int       `json:"downspeed"`
-	Upspeed     int       `json:"upspeed"`
-	Burstspeed  int       `json:"burstspeed"`
-	Duration    int       `json:"duration"`
-	Gateway     string    `json:"gateway"`
-	Priority    int       `json:"priority"`
-	DateEnd     time.Time `json:"date_end"`
-	DateExpires time.Time `json:"date_expires"`
-	PfconfigID  uint      `json:"pfconfig_id"`
-	DueDay      int       `json:"due_day"`
-	LaterCount  int       `json:"later_count"`
+	FirstName  string `json:"first_name"`
+	LastName   string `json:"last_name"`
+	FramedIp   string `json:"framed_ip"`
+	Type       string `json:"type"`
+	Status     string `json:"status"`
+	Mac        string `json:"mac"`
+	Loc        string `json:"loc"`
+	Downspeed  int    `json:"downspeed"`
+	Upspeed    int    `json:"upspeed"`
+	Burstspeed int    `json:"burstspeed"`
+	Duration   int    `json:"duration"`
+	Gateway    string `json:"gateway"`
+	Priority   int    `json:"priority"`
+	PfconfigID uint   `json:"pfconfig_id"`
+	DueDay     int    `json:"due_day"`
+	OverDue    bool   `json:"over_due"`
+	LaterCount int    `json:"later_count"`
 }
 
 // MigrateDB - Create the table if not exist in DB
