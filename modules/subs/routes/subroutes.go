@@ -103,12 +103,18 @@ func SubRouter(db submodel.Crud) chi.Router {
 			render.Render(w, r, utils.ErrInvalidRequest(err, "DB error", http.StatusInternalServerError))
 			return
 		}
-		sub.Status = status
 		if status == "active" {
-			if sub.LaterCount > 20 {
+			if sub.Status == status {
+				render.JSON(w, r, sub)
+				return
+			}
+			sub.Status = status
+			sub.LaterCount += 1
+			if sub.LaterCount > 14 {
 				sub.Status = "inactive"
 			}
-			sub.LaterCount += 1
+		} else {
+			sub.Status = status
 		}
 		err = db.Update(sub)
 		if err == nil {
