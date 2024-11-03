@@ -100,7 +100,7 @@ func (s *Storage) GetAll() ([]Collection, error) {
 
 func (s *Storage) GetByYear(y int) ([]Collection, error) {
 	var collections []Collection
-	result := s.DB.Where("Year = ?", y).Find(&collections)
+	result := s.DB.Where("Year = \"?\"", y).Find(&collections)
 	if result.Error != nil {
 		return nil, result.Error
 	}
