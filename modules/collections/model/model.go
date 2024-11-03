@@ -51,6 +51,7 @@ type Crud interface {
 	GetAll() ([]Collection, error)
 	GetBySubId(id uint) ([]Collection, error)
 	GetById(uid uint) (*Collection, error)
+	GetByYear(id int) ([]Collection, error)
 	Add(collection *Collection) error
 	AddBulk(collections []Collection) error
 	Update(collection *Collection) error
@@ -91,6 +92,15 @@ func (s *Storage) Add(collection *Collection) error {
 func (s *Storage) GetAll() ([]Collection, error) {
 	var collections []Collection
 	result := s.DB.Find(&collections)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return collections, nil
+}
+
+func (s *Storage) GetByYear(y int) ([]Collection, error) {
+	var collections []Collection
+	result := s.DB.Preload("Subs").Where("Year = ?", y).Find(&collections)
 	if result.Error != nil {
 		return nil, result.Error
 	}
