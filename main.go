@@ -22,6 +22,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
 	"github.com/rbaylon/srvcman/database"
+	collectionmodel "github.com/rbaylon/srvcman/modules/collections/model"
+	collectionroutes "github.com/rbaylon/srvcman/modules/collections/routes"
 	dhcpmodel "github.com/rbaylon/srvcman/modules/dhcps/model"
 	dhcproutes "github.com/rbaylon/srvcman/modules/dhcps/routes"
 	paymentmodel "github.com/rbaylon/srvcman/modules/payments/model"
@@ -66,6 +68,7 @@ func main() {
 	runtimemodel.MigrateDB(db)
 	paymentmodel.MigrateDB(db)
 	tunnelmodel.MigrateDB(db)
+	collectionmodel.MigrateDB(db)
 
 	userStore := usermodel.New(db)
 	voucherStore := vouchermodel.New(db)
@@ -76,6 +79,7 @@ func main() {
 	rtStore := runtimemodel.New(db)
 	paymentStore := paymentmodel.New(db)
 	tunnelStore := tunnelmodel.New(db)
+	collectionStore := collectionmodel.New(db)
 
 	r := chi.NewRouter()
 	r.Use(render.SetContentType(render.ContentTypeJSON))
@@ -96,6 +100,7 @@ func main() {
 	r.Mount("/api/v1/runtime", runtimeroutes.RuntimeRouter(rtStore))
 	r.Mount("/api/v1/payments", paymentroutes.PaymentRouter(paymentStore))
 	r.Mount("/api/v1/tunnels", tunnelroutes.TunnelRouter(tunnelStore))
+	r.Mount("/api/v1/collections", collectionroutes.CollectionRouter(collectionStore))
 
 	http.ListenAndServe(fmt.Sprintf("%s:%s", app_ip, app_port), r)
 }

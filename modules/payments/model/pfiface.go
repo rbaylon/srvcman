@@ -10,10 +10,7 @@ import (
 
 type Payment struct {
 	gorm.Model
-	Month      string `json:"month"`
-	DueDate    int    `json:"due_date"`
 	DatePaid   string `json:"date_paid"`
-	Paid       bool   `json:"paid"`
 	ScreenShot string `json:"screen_shot"`
 	AmountPaid int    `json:"amount_paid"`
 	SubID      uint   `json:"sub_id"`
