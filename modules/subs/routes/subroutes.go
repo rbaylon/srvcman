@@ -173,12 +173,11 @@ func SubRouter(db submodel.Crud) chi.Router {
 			render.Render(w, r, utils.ErrInvalidRequest(err, fmt.Sprintf("Invalid sub ID %s", chi.URLParam(r, "subId")), http.StatusBadRequest))
 			return
 		}
-		sub := &submodel.Sub{}
-		if err = render.Bind(r, sub); err != nil {
-			render.Render(w, r, utils.ErrInvalidRequest(err, "Bind error", http.StatusBadRequest))
+		sub, err := db.GetById(uint(id))
+		if err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "DB error", http.StatusInternalServerError))
 			return
 		}
-		sub.ID = uint(id)
 		err = db.Delete(sub)
 		if err == nil {
 			render.JSON(w, r, sub)

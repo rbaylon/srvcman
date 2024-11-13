@@ -116,13 +116,12 @@ func CollectionRouter(db collectionmodel.Crud) chi.Router {
 			render.Render(w, r, utils.ErrInvalidRequest(err, fmt.Sprintf("Invalid collection ID %s", chi.URLParam(r, "collectionId")), http.StatusBadRequest))
 			return
 		}
-		collection := collectionmodel.Collection{}
-		if err = render.Bind(r, &collection); err != nil {
-			render.Render(w, r, utils.ErrInvalidRequest(err, "Bind error", http.StatusBadRequest))
+		collection, err := db.GetById(uint(id))
+		if err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "DB error", http.StatusInternalServerError))
 			return
 		}
-		collection.ID = uint(id)
-		err = db.Delete(&collection)
+		err = db.Delete(collection)
 		if err == nil {
 			render.JSON(w, r, collection)
 			return
