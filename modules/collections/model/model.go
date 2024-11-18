@@ -10,20 +10,22 @@ import (
 
 type Collection struct {
 	gorm.Model
-	Year  string `json:"year"`
-	Jan   int    `json:"jan"`
-	Feb   int    `json:"feb"`
-	Mar   int    `json:"mar"`
-	Apr   int    `json:"apr"`
-	May   int    `json:"may"`
-	Jun   int    `json:"jun"`
-	Jul   int    `json:"jul"`
-	Aug   int    `json:"aug"`
-	Sep   int    `json:"sep"`
-	Oct   int    `json:"oct"`
-	Nov   int    `json:"nov"`
-	Dec   int    `json:"dec"`
-	SubID uint   `json:"sub_id"`
+	Year    string `json:"year"`
+	Jan     int    `json:"jan"`
+	Feb     int    `json:"feb"`
+	Mar     int    `json:"mar"`
+	Apr     int    `json:"apr"`
+	May     int    `json:"may"`
+	Jun     int    `json:"jun"`
+	Jul     int    `json:"jul"`
+	Aug     int    `json:"aug"`
+	Sep     int    `json:"sep"`
+	Oct     int    `json:"oct"`
+	Nov     int    `json:"nov"`
+	Dec     int    `json:"dec"`
+	SubID   uint   `json:"sub_id"`
+	SubName string `json:"sub_name"`
+	SubDue  int    `json:"sub_due"`
 }
 
 type Collections struct {
