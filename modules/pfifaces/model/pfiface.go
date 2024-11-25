@@ -16,6 +16,8 @@ type Pfiface struct {
 	Default    bool   `json:"default"`
 	Type       string `json:"type"`
 	Gateway    string `json:"gateway"`
+	Ip         string `json:"ip"`
+	Netmask    string `json:"netmask"`
 	PfconfigID uint   `json:"pfconfig_id"`
 }
 
