@@ -10,15 +10,16 @@ import (
 
 type Pfiface struct {
 	gorm.Model
-	Name       string `json:"name"`
-	Speed      string `json:"speed"`
-	Device     string `json:"device"`
-	Default    bool   `json:"default"`
-	Type       string `json:"type"`
-	Gateway    string `json:"gateway"`
-	Ip         string `json:"ip"`
-	Netmask    string `json:"netmask"`
-	PfconfigID uint   `json:"pfconfig_id"`
+	Name         string `json:"name"`
+	Speed        string `json:"speed"`
+	Device       string `json:"device"`
+	Default      bool   `json:"default"`
+	Type         string `json:"type"`
+	Gateway      string `json:"gateway"`
+	Ip           string `json:"ip"`
+	Netmask      string `json:"netmask"`
+	LbPercentage int    `json:"lb_percentage"`
+	PfconfigID   uint   `json:"pfconfig_id"`
 }
 
 type Pfifaces struct {

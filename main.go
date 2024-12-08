@@ -32,6 +32,8 @@ import (
 	pfconfigroutes "github.com/rbaylon/srvcman/modules/pfconfig/routes"
 	pfifacemodel "github.com/rbaylon/srvcman/modules/pfifaces/model"
 	pfifaceroutes "github.com/rbaylon/srvcman/modules/pfifaces/routes"
+	pflowmodel "github.com/rbaylon/srvcman/modules/pflows/model"
+	pflowroutes "github.com/rbaylon/srvcman/modules/pflows/routes"
 	runtimemodel "github.com/rbaylon/srvcman/modules/runtimes/model"
 	runtimeroutes "github.com/rbaylon/srvcman/modules/runtimes/routes"
 	"github.com/rbaylon/srvcman/modules/security"
@@ -43,6 +45,7 @@ import (
 	userroutes "github.com/rbaylon/srvcman/modules/users/routes"
 	vouchermodel "github.com/rbaylon/srvcman/modules/vouchers/model"
 	voucherroutes "github.com/rbaylon/srvcman/modules/vouchers/routes"
+	"github.com/rbaylon/srvcman/utils"
 )
 
 func main() {
@@ -63,6 +66,7 @@ func main() {
 	vouchermodel.MigrateDB(db)
 	pfconfigmodel.MigrateDB(db)
 	pfifacemodel.MigrateDB(db)
+	pflowmodel.MigrateDB(db)
 	dhcpmodel.MigrateDB(db)
 	submodel.MigrateDB(db)
 	runtimemodel.MigrateDB(db)
@@ -74,6 +78,7 @@ func main() {
 	voucherStore := vouchermodel.New(db)
 	pfconfigStore := pfconfigmodel.New(db)
 	pfifaceStore := pfifacemodel.New(db)
+	pflowStore := pflowmodel.New(db)
 	subsStore := submodel.New(db)
 	dhcpStore := dhcpmodel.New(db)
 	rtStore := runtimemodel.New(db)
@@ -95,12 +100,13 @@ func main() {
 	r.Mount("/api/v1/vouchers", voucherroutes.VoucherRouter(voucherStore))
 	r.Mount("/api/v1/pfconfig", pfconfigroutes.PfconfigRouter(pfconfigStore))
 	r.Mount("/api/v1/pfiface", pfifaceroutes.PfifaceRouter(pfifaceStore))
+	r.Mount("/api/v1/pflow", pflowroutes.PflowRouter(pflowStore))
 	r.Mount("/api/v1/subs", subroutes.SubRouter(subsStore))
 	r.Mount("/api/v1/dhcps", dhcproutes.DhcpRouter(dhcpStore))
 	r.Mount("/api/v1/runtime", runtimeroutes.RuntimeRouter(rtStore))
 	r.Mount("/api/v1/payments", paymentroutes.PaymentRouter(paymentStore))
 	r.Mount("/api/v1/tunnels", tunnelroutes.TunnelRouter(tunnelStore))
 	r.Mount("/api/v1/collections", collectionroutes.CollectionRouter(collectionStore))
-
+	go utils.CheckExpired(voucherStore)
 	http.ListenAndServe(fmt.Sprintf("%s:%s", app_ip, app_port), r)
 }

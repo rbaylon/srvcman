@@ -105,7 +105,7 @@ func VoucherRouter(db vouchermodel.Crud) chi.Router {
 			voucher.Status = "active"
 			voucher.DateStarted = time.Now()
 			voucher.DateEnd = voucher.DateStarted.Add(time.Hour * time.Duration(voucher.Hours))
-			voucher.DateExpires = voucher.DateEnd.Add(time.Hour * 120)
+			voucher.DateExpires = voucher.DateEnd.Add(time.Hour * 1)
 			voucher.Ip = subip
 			voucher.PfconfigID = pfc.ID
 			err = db.Update(voucher)

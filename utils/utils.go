@@ -2,8 +2,12 @@
 package utils
 
 import (
-	"github.com/go-chi/render"
+	"log"
 	"net/http"
+	"time"
+
+	"github.com/go-chi/render"
+	vouchermodel "github.com/rbaylon/srvcman/modules/vouchers/model"
 )
 
 type ErrResponse struct {
@@ -29,3 +33,13 @@ func ErrInvalidRequest(err error, msg string, statuscode int) render.Renderer {
 	}
 }
 
+func CheckExpired(db vouchermodel.Crud) {
+	for {
+		log.Println("Checking for expired vouchers")
+		err := db.DisableExpired()
+		if err != nil {
+			log.Println("Error during voucher expired check")
+		}
+		time.Sleep(5 * time.Minute)
+	}
+}

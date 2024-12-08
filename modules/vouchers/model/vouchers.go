@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	runtimemodel "github.com/rbaylon/srvcman/modules/runtimes/model"
 	"gorm.io/gorm"
 )
 
@@ -58,6 +59,7 @@ type Crud interface {
 	Delete(voucher *Voucher) error
 	GetByVoucherValue(value string) (*Voucher, error)
 	GetDB() *gorm.DB
+	DisableExpired() error
 }
 
 type Storage struct {
@@ -97,6 +99,35 @@ func (s *Storage) GetAll() ([]Voucher, error) {
 		return nil, result.Error
 	}
 	return vouchers, nil
+}
+
+func (s *Storage) DisableExpired() error {
+	var vouchers []Voucher
+	result := s.DB.Where("Status = ?", "active").Find(&vouchers)
+	if result.Error != nil {
+		return result.Error
+	}
+	update := false
+	for _, v := range vouchers {
+		overtime := time.Since(v.DateExpires).Minutes()
+		if overtime > 0 {
+			v.Status = "used"
+			s.DB.Save(&v)
+			log.Println("Code expired:", v.Value)
+			update = true
+		}
+	}
+	if update {
+		rtdb := runtimemodel.New(s.DB)
+		rt := &runtimemodel.Runtime{}
+		rt.Action = "updatepf"
+		rt.Status = "active"
+		err := rtdb.Add(rt)
+		if err != nil {
+			log.Println("update pf failed")
+		}
+	}
+	return nil
 }
 
 func (s *Storage) GetById(id uint) (*Voucher, error) {
