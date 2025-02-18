@@ -26,6 +26,7 @@
 package pfconfigroutes
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -46,11 +47,12 @@ func PfconfigRouter(db pfconfigmodel.Crud) chi.Router {
 
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		res, errdb := db.GetAll()
+		w.Header().Set("Content-Type", "application/json")
 		if errdb != nil {
-			render.Render(w, r, utils.ErrInvalidRequest(errdb, "DB error", http.StatusInternalServerError))
+			json.NewEncoder(w).Encode(map[string]string{"Error": fmt.Sprintf("%s", errdb)})
 			return
 		}
-		render.JSON(w, r, res)
+		json.NewEncoder(w).Encode(res)
 	})
 	r.Get("/{pfconfigId}", func(w http.ResponseWriter, r *http.Request) {
 		id, err := strconv.Atoi(chi.URLParam(r, "pfconfigId"))
@@ -95,13 +97,15 @@ func PfconfigRouter(db pfconfigmodel.Crud) chi.Router {
 	})
 	r.Post("/create", func(w http.ResponseWriter, r *http.Request) {
 		pfconfig := pfconfigmodel.Pfconfig{}
-		if err := render.Bind(r, &pfconfig); err != nil {
-			render.Render(w, r, utils.ErrInvalidRequest(err, "Bind error", http.StatusBadRequest))
-			return
+		err := json.NewDecoder(r.Body).Decode(&pfconfig)
+		w.Header().Set("Content-Type", "application/json")
+		if err != nil {
+			json.NewEncoder(w).Encode(map[string]string{"Error": fmt.Sprintf("%s", err)})
 		}
-		err := db.Add(&pfconfig)
+
+		err = db.Add(&pfconfig)
 		if err == nil {
-			render.JSON(w, r, pfconfig)
+			json.NewEncoder(w).Encode(pfconfig)
 			return
 		}
 		render.Render(w, r, utils.ErrInvalidRequest(err, "DB error", http.StatusInternalServerError))
