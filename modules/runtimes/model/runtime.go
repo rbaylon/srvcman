@@ -10,8 +10,9 @@ import (
 
 type Runtime struct {
 	gorm.Model
-	Action string `json:"action"`
-	Status string `json:"status"`
+	Action   string `json:"action"`
+	Status   string `json:"status"`
+	Workerid int    `json:"workerid"`
 }
 
 type Runtimes struct {
@@ -34,6 +35,7 @@ func MigrateDB(db *gorm.DB) {
 type Crud interface {
 	GetAll() ([]Runtime, error)
 	GetById(uid uint) (*Runtime, error)
+	GetByWorkerId(wid uint) (*Runtime, error)
 	Add(runtime *Runtime) error
 	Update(runtime *Runtime) error
 	Delete(runtime *Runtime) error
@@ -74,6 +76,15 @@ func (s *Storage) GetAll() ([]Runtime, error) {
 func (s *Storage) GetById(id uint) (*Runtime, error) {
 	var runtime Runtime
 	result := s.DB.First(&runtime, id)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return &runtime, nil
+}
+
+func (s *Storage) GetByWorkerId(wid uint) (*Runtime, error) {
+	var runtime Runtime
+	result := s.DB.Where("Workerid = ?", wid).First(&runtime)
 	if result.Error != nil {
 		return nil, result.Error
 	}

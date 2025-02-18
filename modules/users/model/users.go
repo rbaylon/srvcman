@@ -32,8 +32,12 @@ func MigrateDB(db *gorm.DB) {
 			uname = database.GetEnvVariable("APP_ADMIN")
 			upass = database.GetEnvVariable("APP_ADMIN_PW")
 		)
+		safepassword, err := bcrypt.GenerateFromPassword([]byte(upass), 14)
+		if err != nil {
+			log.Println(err)
+		}
 		user.Username = uname
-		user.Password = upass
+		user.Password = string(safepassword)
 		user.Firstname = "Admin"
 		user.Lastname = "istrator"
 		res := db.Create(&user)

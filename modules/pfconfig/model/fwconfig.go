@@ -27,6 +27,7 @@ type Pfconfig struct {
 	Subs              []submodel.Sub         `json:"subs"`
 	Dns               string                 `json:"dns"`
 	Pflows            []pflowmodel.Pflow     `json:"pflows"`
+	Workername        string                 `json:"workername"`
 }
 
 // MigrateDB - Create the table if not exist in DB
