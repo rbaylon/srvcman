@@ -34,6 +34,8 @@ import (
 	pfifaceroutes "github.com/rbaylon/srvcman/modules/pfifaces/routes"
 	pflowmodel "github.com/rbaylon/srvcman/modules/pflows/model"
 	pflowroutes "github.com/rbaylon/srvcman/modules/pflows/routes"
+	planmodel "github.com/rbaylon/srvcman/modules/plans/model"
+	planroutes "github.com/rbaylon/srvcman/modules/plans/routes"
 	runtimemodel "github.com/rbaylon/srvcman/modules/runtimes/model"
 	runtimeroutes "github.com/rbaylon/srvcman/modules/runtimes/routes"
 	"github.com/rbaylon/srvcman/modules/security"
@@ -73,6 +75,7 @@ func main() {
 	paymentmodel.MigrateDB(db)
 	tunnelmodel.MigrateDB(db)
 	collectionmodel.MigrateDB(db)
+	planmodel.MigrateDB(db)
 
 	userStore := usermodel.New(db)
 	voucherStore := vouchermodel.New(db)
@@ -85,6 +88,7 @@ func main() {
 	paymentStore := paymentmodel.New(db)
 	tunnelStore := tunnelmodel.New(db)
 	collectionStore := collectionmodel.New(db)
+	planStore := planmodel.New(db)
 
 	r := chi.NewRouter()
 	r.Use(render.SetContentType(render.ContentTypeJSON))
@@ -107,6 +111,7 @@ func main() {
 	r.Mount("/api/v1/payments", paymentroutes.PaymentRouter(paymentStore))
 	r.Mount("/api/v1/tunnels", tunnelroutes.TunnelRouter(tunnelStore))
 	r.Mount("/api/v1/collections", collectionroutes.CollectionRouter(collectionStore))
+	r.Mount("/api/v1/plans", planroutes.PlanRouter(planStore))
 	go utils.CheckExpired(voucherStore)
 	http.ListenAndServe(fmt.Sprintf("%s:%s", app_ip, app_port), r)
 }

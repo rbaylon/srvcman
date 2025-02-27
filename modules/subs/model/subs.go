@@ -29,6 +29,7 @@ type Sub struct {
 	DueDay     int    `json:"due_day"`
 	OverDue    bool   `json:"over_due"`
 	LaterCount int    `json:"later_count"`
+	Plan       string `json:"plan"`
 }
 
 // MigrateDB - Create the table if not exist in DB

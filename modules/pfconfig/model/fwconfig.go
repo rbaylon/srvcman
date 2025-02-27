@@ -8,6 +8,7 @@ import (
 	dhcpmodel "github.com/rbaylon/srvcman/modules/dhcps/model"
 	pfifacemodel "github.com/rbaylon/srvcman/modules/pfifaces/model"
 	pflowmodel "github.com/rbaylon/srvcman/modules/pflows/model"
+	planmodel "github.com/rbaylon/srvcman/modules/plans/model"
 	submodel "github.com/rbaylon/srvcman/modules/subs/model"
 	vouchermodel "github.com/rbaylon/srvcman/modules/vouchers/model"
 	"gorm.io/gorm"
@@ -28,6 +29,7 @@ type Pfconfig struct {
 	Dns               string                 `json:"dns"`
 	Pflows            []pflowmodel.Pflow     `json:"pflows"`
 	Workername        string                 `json:"workername"`
+	Plans             []planmodel.Plan       `json:"plans"`
 }
 
 // MigrateDB - Create the table if not exist in DB
@@ -99,7 +101,7 @@ func (s *Storage) GetById(id uint) (*Pfconfig, error) {
 
 func (s *Storage) GetByRouterId(value string) (*Pfconfig, error) {
 	var pfconfig Pfconfig
-	result := s.DB.Where("Router = ?", value).Preload("Ifaces").Preload("Vouchers").Preload("Dhcps").Preload("Subs").Preload("Pflows").First(&pfconfig)
+	result := s.DB.Where("Router = ?", value).Preload("Ifaces").Preload("Vouchers").Preload("Dhcps").Preload("Subs").Preload("Pflows").Preload("Plans").First(&pfconfig)
 	if result.Error != nil {
 		return nil, result.Error
 	}
