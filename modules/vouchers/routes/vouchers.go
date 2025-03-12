@@ -29,6 +29,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -70,7 +71,11 @@ func VoucherRouter(db vouchermodel.Crud) chi.Router {
 		render.JSON(w, r, voucher)
 	})
 	r.Get("/value/{voucher}/{ip}/{routerid}", func(w http.ResponseWriter, r *http.Request) {
-		val := chi.URLParam(r, "voucher")
+		val, uerr := url.QueryUnescape(chi.URLParam(r, "voucher"))
+		if uerr != nil {
+			log.Println("Voucher or sub invalid:", uerr)
+			render.Render(w, r, utils.ErrInvalidRequest(uerr, "Invalid voucher", http.StatusNotFound))
+		}
 		voucher, err := db.GetByVoucherValue(val)
 		dbconn := db.GetDB()
 		subsdb := submodel.New(dbconn)
@@ -100,7 +105,11 @@ func VoucherRouter(db vouchermodel.Crud) chi.Router {
 			render.Render(w, r, utils.ErrInvalidRequest(err, "DB get error: pfconfig ", http.StatusInternalServerError))
 			return
 		}
-		subip := chi.URLParam(r, "ip")
+		subip, ierr := url.QueryUnescape(chi.URLParam(r, "ip"))
+		if ierr != nil {
+			log.Println("Voucher or sub invalid:", ierr)
+			render.Render(w, r, utils.ErrInvalidRequest(ierr, "Invalid ip", http.StatusNotFound))
+		}
 		if voucher.Status == "available" && pfc != nil {
 			voucher.Status = "active"
 			voucher.DateStarted = time.Now()
