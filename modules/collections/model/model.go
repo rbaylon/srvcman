@@ -26,6 +26,7 @@ type Collection struct {
 	SubID   uint   `json:"sub_id"`
 	SubName string `json:"sub_name"`
 	SubDue  int    `json:"sub_due"`
+	SubPlan string `json:"sub_plan"`
 }
 
 type Collections struct {
