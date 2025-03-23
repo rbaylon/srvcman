@@ -65,6 +65,23 @@ func UserRouter(db usermodel.Crud) chi.Router {
 		}
 		render.JSON(w, r, user)
 	})
+	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		res, errdb := db.GetAll()
+		if errdb != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(errdb, "DB error", http.StatusInternalServerError))
+			return
+		}
+		render.JSON(w, r, res)
+	})
+	r.Get("/username/{uname}", func(w http.ResponseWriter, r *http.Request) {
+		u := chi.URLParam(r, "uname")
+		user, err := db.GetByUsername(u)
+		if err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "DB error", http.StatusInternalServerError))
+			return
+		}
+		render.JSON(w, r, *user)
+	})
 	r.Put("/{userId}", func(w http.ResponseWriter, r *http.Request) {
 		id, err := strconv.Atoi(chi.URLParam(r, "userId"))
 		if err != nil {
@@ -76,6 +93,8 @@ func UserRouter(db usermodel.Crud) chi.Router {
 			render.Render(w, r, utils.ErrInvalidRequest(err, "Bind error", http.StatusBadRequest))
 			return
 		}
+		olduser, _ := db.GetById(uint(id))
+		db.RemoveGroups(olduser)
 		user.ID = uint(id)
 		err = db.Update(&user)
 		if err == nil {

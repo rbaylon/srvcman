@@ -44,8 +44,9 @@ func CollectionRouter(db collectionmodel.Crud) chi.Router {
 	r := chi.NewRouter()
 	r.Use(security.TokenRequired)
 
-	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		res, errdb := db.GetAll()
+	r.Get("/year/{year}", func(w http.ResponseWriter, r *http.Request) {
+		yyyy := chi.URLParam(r, "year")
+		res, errdb := db.GetByYear(yyyy)
 		if errdb != nil {
 			render.Render(w, r, utils.ErrInvalidRequest(errdb, "DB error", http.StatusInternalServerError))
 			return

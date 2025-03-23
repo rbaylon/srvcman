@@ -180,6 +180,15 @@ func SubRouter(db submodel.Crud) chi.Router {
 		}
 		err = db.Delete(sub)
 		if err == nil {
+			dbconn := db.GetDB()
+			rtdb := runtimemodel.New(dbconn)
+			rt := &runtimemodel.Runtime{}
+			rt.Action = "updatepf"
+			rt.Status = "active"
+			err := rtdb.Add(rt)
+			if err != nil {
+				log.Println("update pf failed")
+			}
 			render.JSON(w, r, sub)
 			return
 		}

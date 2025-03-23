@@ -74,5 +74,18 @@ func RuntimeRouter(db runtimemodel.Crud) chi.Router {
 		render.Render(w, r, utils.ErrInvalidRequest(err, "DB delete error", http.StatusInternalServerError))
 		return
 	})
+	r.Post("/create", func(w http.ResponseWriter, r *http.Request) {
+		rt := &runtimemodel.Runtime{}
+		if err := render.Bind(r, rt); err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "Bind error", http.StatusBadRequest))
+			return
+		}
+		erradd := db.Add(rt)
+		if erradd == nil {
+			render.JSON(w, r, rt)
+			return
+		}
+		render.Render(w, r, utils.ErrInvalidRequest(erradd, "DB error", http.StatusInternalServerError))
+	})
 	return r
 }

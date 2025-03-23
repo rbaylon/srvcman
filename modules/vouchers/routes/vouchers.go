@@ -168,14 +168,14 @@ func VoucherRouter(db vouchermodel.Crud) chi.Router {
 		render.Render(w, r, utils.ErrInvalidRequest(err, "DB error", http.StatusInternalServerError))
 	})
 	r.Post("/createBulk", func(w http.ResponseWriter, r *http.Request) {
-		voucher := vouchermodel.Vouchers{}
-		if err := render.Bind(r, &voucher); err != nil {
+		vouchers := vouchermodel.Vouchers{}
+		if err := render.Bind(r, &vouchers); err != nil {
 			render.Render(w, r, utils.ErrInvalidRequest(err, "Bind error", http.StatusBadRequest))
 			return
 		}
-		err := db.AddBulk(voucher.Vouchers)
+		err := db.AddBulk(vouchers)
 		if err == nil {
-			render.JSON(w, r, voucher)
+			render.JSON(w, r, vouchers)
 			return
 		}
 		render.Render(w, r, utils.ErrInvalidRequest(err, "DB error", http.StatusInternalServerError))

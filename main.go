@@ -26,6 +26,8 @@ import (
 	collectionroutes "github.com/rbaylon/srvcman/modules/collections/routes"
 	dhcpmodel "github.com/rbaylon/srvcman/modules/dhcps/model"
 	dhcproutes "github.com/rbaylon/srvcman/modules/dhcps/routes"
+	groupmodel "github.com/rbaylon/srvcman/modules/groups/model"
+	grouproutes "github.com/rbaylon/srvcman/modules/groups/routes"
 	paymentmodel "github.com/rbaylon/srvcman/modules/payments/model"
 	paymentroutes "github.com/rbaylon/srvcman/modules/payments/routes"
 	pfconfigmodel "github.com/rbaylon/srvcman/modules/pfconfig/model"
@@ -36,6 +38,8 @@ import (
 	pflowroutes "github.com/rbaylon/srvcman/modules/pflows/routes"
 	planmodel "github.com/rbaylon/srvcman/modules/plans/model"
 	planroutes "github.com/rbaylon/srvcman/modules/plans/routes"
+	policymodel "github.com/rbaylon/srvcman/modules/policies/model"
+	policyroutes "github.com/rbaylon/srvcman/modules/policies/routes"
 	runtimemodel "github.com/rbaylon/srvcman/modules/runtimes/model"
 	runtimeroutes "github.com/rbaylon/srvcman/modules/runtimes/routes"
 	"github.com/rbaylon/srvcman/modules/security"
@@ -65,6 +69,7 @@ func main() {
 
 	// Migrate tables
 	usermodel.MigrateDB(db)
+	groupmodel.MigrateDB(db)
 	vouchermodel.MigrateDB(db)
 	pfconfigmodel.MigrateDB(db)
 	pfifacemodel.MigrateDB(db)
@@ -76,8 +81,11 @@ func main() {
 	tunnelmodel.MigrateDB(db)
 	collectionmodel.MigrateDB(db)
 	planmodel.MigrateDB(db)
+	policymodel.MigrateDB(db)
 
 	userStore := usermodel.New(db)
+	groupStore := groupmodel.New(db)
+	policyStore := policymodel.New(db)
 	voucherStore := vouchermodel.New(db)
 	pfconfigStore := pfconfigmodel.New(db)
 	pfifaceStore := pfifacemodel.New(db)
@@ -101,6 +109,8 @@ func main() {
 
 	// Mount the user sub-router:
 	r.Mount("/api/v1/users", userroutes.UserRouter(userStore))
+	r.Mount("/api/v1/groups", grouproutes.GroupRouter(groupStore))
+	r.Mount("/api/v1/policies", policyroutes.PolicyRouter(policyStore))
 	r.Mount("/api/v1/vouchers", voucherroutes.VoucherRouter(voucherStore))
 	r.Mount("/api/v1/pfconfig", pfconfigroutes.PfconfigRouter(pfconfigStore))
 	r.Mount("/api/v1/pfiface", pfifaceroutes.PfifaceRouter(pfifaceStore))

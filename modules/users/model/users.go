@@ -6,16 +6,18 @@ import (
 	"net/http"
 
 	"github.com/rbaylon/srvcman/database"
+	groupmodel "github.com/rbaylon/srvcman/modules/groups/model"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
 type User struct {
 	gorm.Model
-	Username  string `json:"username" gorm:"unique;not null"`
-	Password  string `json:"password" gorm:"not null"`
-	Firstname string `json:"firstname" gorm:"not null"`
-	Lastname  string `json:"lastname" gorm:"not null"`
+	Username  string             `json:"username" gorm:"unique;not null"`
+	Password  string             `json:"password" gorm:"not null"`
+	Firstname string             `json:"firstname" gorm:"not null"`
+	Lastname  string             `json:"lastname" gorm:"not null"`
+	Groups    []groupmodel.Group `json:"groups" gorm:"many2many:user_groups;"`
 }
 
 // MigrateDB - Create the table if not exist in DB
@@ -58,6 +60,7 @@ type Crud interface {
 	Add(user *User) error
 	Update(user *User) error
 	Delete(user *User) error
+	RemoveGroups(user *User) error
 	GetByUsername(username string) (*User, error)
 }
 
@@ -95,7 +98,7 @@ func (s *Storage) GetAll() ([]User, error) {
 
 func (s *Storage) GetById(id uint) (*User, error) {
 	var user User
-	result := s.DB.First(&user, id)
+	result := s.DB.Preload("Groups").First(&user, id)
 	if result.Error != nil {
 		return nil, result.Error
 	}
@@ -104,7 +107,7 @@ func (s *Storage) GetById(id uint) (*User, error) {
 
 func (s *Storage) GetByUsername(username string) (*User, error) {
 	var user User
-	result := s.DB.Where("Username = ?", username).First(&user)
+	result := s.DB.Preload("Groups").Where("Username = ?", username).First(&user)
 	if result.Error != nil {
 		return nil, result.Error
 	}
@@ -131,6 +134,14 @@ func (s *Storage) Delete(user *User) error {
 	result := s.DB.Delete(user)
 	if result.Error != nil {
 		return result.Error
+	}
+	return nil
+}
+
+func (s *Storage) RemoveGroups(user *User) error {
+	err := s.DB.Model(user).Association("Groups").Delete(user.Groups)
+	if err != nil {
+		return err
 	}
 	return nil
 }

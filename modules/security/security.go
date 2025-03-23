@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt"
@@ -81,11 +82,13 @@ func sendtoken(w http.ResponseWriter, r *http.Request, username string) {
 
 func TokenRequired(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log.Println(r.Method, r.RequestURI)
 		reqtoken := r.Header.Get("Authorization")
-		if reqtoken == "" {
+		if !strings.Contains(reqtoken, "Bearer ") {
 			render.Render(w, r, utils.ErrInvalidRequest(fmt.Errorf("JWT error"), "Authorization Bearer not found.", http.StatusUnauthorized))
 			return
 		}
+		//log.Println(reqtoken)
 		token := reqtoken[len("Bearer "):]
 		err := validateToken(token, r)
 		if err != nil {
@@ -97,10 +100,14 @@ func TokenRequired(next http.Handler) http.Handler {
 }
 
 func createToken(username string) (string, error) {
+	var expiry time.Duration = 24
+	if username == "admin" {
+		expiry = 8760
+	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256,
 		jwt.MapClaims{
 			"username": username,
-			"exp":      time.Now().Add(time.Hour * 768).Unix(),
+			"exp":      time.Now().Add(time.Hour * expiry).Unix(),
 		})
 
 	tokenString, err := token.SignedString(secretKey)

@@ -54,7 +54,7 @@ type Crud interface {
 	GetAll() ([]Voucher, error)
 	GetById(uid uint) (*Voucher, error)
 	Add(voucher *Voucher) error
-	AddBulk(vouchers []Voucher) error
+	AddBulk(vouchers Vouchers) error
 	Update(voucher *Voucher) error
 	Delete(voucher *Voucher) error
 	GetByVoucherValue(value string) (*Voucher, error)
@@ -72,8 +72,8 @@ func New(db *gorm.DB) *Storage {
 	}
 }
 
-func (s *Storage) AddBulk(vouchers []Voucher) error {
-	result := s.DB.Create(vouchers)
+func (s *Storage) AddBulk(vouchers Vouchers) error {
+	result := s.DB.Create(vouchers.Vouchers)
 	if result.Error != nil {
 		return result.Error
 	}
