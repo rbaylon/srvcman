@@ -53,10 +53,15 @@ type Crud interface {
 	Update(pfconfig *Pfconfig) error
 	Delete(pfconfig *Pfconfig) error
 	GetByRouterId(value string) (*Pfconfig, error)
+	GetDB() *gorm.DB
 }
 
 type Storage struct {
 	DB *gorm.DB
+}
+
+func (s *Storage) GetDB() *gorm.DB {
+	return s.DB
 }
 
 func New(db *gorm.DB) *Storage {

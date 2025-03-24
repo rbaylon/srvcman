@@ -37,10 +37,15 @@ type Crud interface {
 	Add(plan *Plan) error
 	Update(plan *Plan) error
 	Delete(plan *Plan) error
+	GetDB() *gorm.DB
 }
 
 type Storage struct {
 	DB *gorm.DB
+}
+
+func (s *Storage) GetDB() *gorm.DB {
+	return s.DB
 }
 
 func New(db *gorm.DB) *Storage {

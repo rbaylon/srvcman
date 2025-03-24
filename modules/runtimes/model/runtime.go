@@ -40,6 +40,7 @@ type Crud interface {
 	Update(runtime *Runtime) error
 	Delete(runtime *Runtime) error
 	GetByAction(value string) (*Runtime, error)
+	GetDB() *gorm.DB
 }
 
 type Storage struct {

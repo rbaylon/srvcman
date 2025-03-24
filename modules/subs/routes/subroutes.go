@@ -44,7 +44,8 @@ var tokenAuth *jwtauth.JWTAuth
 
 func SubRouter(db submodel.Crud) chi.Router {
 	r := chi.NewRouter()
-	r.Use(security.TokenRequired)
+	dbconn := db.GetDB()
+	r.Use(security.TokenRequired(dbconn, "subs"))
 
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		res, errdb := db.GetAll()

@@ -39,10 +39,16 @@ type Crud interface {
 	Delete(policy *Policy) error
 	RemoveGroups(policy *Policy) error
 	GetByPolicyname(policyname string) (*Policy, error)
+	GetByType(moduletype string) ([]Policy, error)
+	GetDB() *gorm.DB
 }
 
 type Storage struct {
 	DB *gorm.DB
+}
+
+func (s *Storage) GetDB() *gorm.DB {
+	return s.DB
 }
 
 func New(db *gorm.DB) *Storage {
@@ -60,12 +66,12 @@ func (s *Storage) Add(policy *Policy) error {
 }
 
 func (s *Storage) GetAll() ([]Policy, error) {
-	var policys []Policy
-	result := s.DB.Find(&policys)
+	var policies []Policy
+	result := s.DB.Find(&policies)
 	if result.Error != nil {
 		return nil, result.Error
 	}
-	return policys, nil
+	return policies, nil
 }
 
 func (s *Storage) GetById(id uint) (*Policy, error) {
@@ -79,11 +85,20 @@ func (s *Storage) GetById(id uint) (*Policy, error) {
 
 func (s *Storage) GetByPolicyname(policyname string) (*Policy, error) {
 	var policy Policy
-	result := s.DB.Preload("Groups").Where("Policyname = ?", policyname).First(&policy)
+	result := s.DB.Preload("Groups").Where("Name = ?", policyname).First(&policy)
 	if result.Error != nil {
 		return nil, result.Error
 	}
 	return &policy, nil
+}
+
+func (s *Storage) GetByType(modtype string) ([]Policy, error) {
+	var policies []Policy
+	result := s.DB.Preload("Groups").Where("Type = ?", modtype).Find(&policies)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return policies, nil
 }
 
 func (s *Storage) Update(policy *Policy) error {
@@ -107,12 +122,7 @@ func (s *Storage) RemoveGroups(policy *Policy) error {
 	if err != nil {
 		return err
 	}
-	admins := groupmodel.Group{}
-	res := s.DB.Where("Groupname = ?", "admins").First(&admins)
-	if res.Error != nil {
-		return res.Error
-	}
-	groups := []groupmodel.Group{admins}
+	groups := []groupmodel.Group{}
 	policy.Groups = groups
 	s.DB.Save(policy)
 	return nil

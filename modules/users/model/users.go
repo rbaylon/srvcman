@@ -62,6 +62,7 @@ type Crud interface {
 	Delete(user *User) error
 	RemoveGroups(user *User) error
 	GetByUsername(username string) (*User, error)
+	GetDB() *gorm.DB
 }
 
 type Storage struct {
@@ -72,6 +73,10 @@ func New(db *gorm.DB) *Storage {
 	return &Storage{
 		DB: db,
 	}
+}
+
+func (s *Storage) GetDB() *gorm.DB {
+	return s.DB
 }
 
 func (s *Storage) Add(user *User) error {

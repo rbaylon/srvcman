@@ -42,7 +42,8 @@ var tokenAuth *jwtauth.JWTAuth
 
 func UserRouter(db usermodel.Crud) chi.Router {
 	r := chi.NewRouter()
-	r.Use(security.TokenRequired)
+	dbconn := db.GetDB()
+	r.Use(security.TokenRequired(dbconn, "users"))
 
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		res, errdb := db.GetAll()

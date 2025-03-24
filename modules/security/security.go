@@ -8,9 +8,11 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt"
+	"gorm.io/gorm"
 
 	"github.com/go-chi/render"
 	"github.com/rbaylon/srvcman/database"
+	policymodel "github.com/rbaylon/srvcman/modules/policies/model"
 	usermodel "github.com/rbaylon/srvcman/modules/users/model"
 	"github.com/rbaylon/srvcman/utils"
 	"golang.org/x/crypto/bcrypt"
@@ -80,23 +82,25 @@ func sendtoken(w http.ResponseWriter, r *http.Request, username string) {
 	render.JSON(w, r, accesstoken)
 }
 
-func TokenRequired(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Println(r.Method, r.RequestURI)
-		reqtoken := r.Header.Get("Authorization")
-		if !strings.Contains(reqtoken, "Bearer ") {
-			render.Render(w, r, utils.ErrInvalidRequest(fmt.Errorf("JWT error"), "Authorization Bearer not found.", http.StatusUnauthorized))
-			return
-		}
-		//log.Println(reqtoken)
-		token := reqtoken[len("Bearer "):]
-		err := validateToken(token, r)
-		if err != nil {
-			render.Render(w, r, utils.ErrInvalidRequest(err, "Invalid token", http.StatusUnauthorized))
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
+func TokenRequired(db *gorm.DB, module string) func(next http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			log.Println(r.Method, r.RequestURI)
+			reqtoken := r.Header.Get("Authorization")
+			if !strings.Contains(reqtoken, "Bearer ") {
+				render.Render(w, r, utils.ErrInvalidRequest(fmt.Errorf("JWT error"), "Authorization Bearer not found.", http.StatusUnauthorized))
+				return
+			}
+			//log.Println(reqtoken)
+			token := reqtoken[len("Bearer "):]
+			err := validateToken(token, r, db, module)
+			if err != nil {
+				render.Render(w, r, utils.ErrInvalidRequest(err, "Invalid token", http.StatusUnauthorized))
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 func createToken(username string) (string, error) {
@@ -118,7 +122,7 @@ func createToken(username string) (string, error) {
 	return tokenString, nil
 }
 
-func validateToken(tokenString string, r *http.Request) error {
+func validateToken(tokenString string, r *http.Request, db *gorm.DB, module string) error {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		return secretKey, nil
 	})
@@ -128,12 +132,39 @@ func validateToken(tokenString string, r *http.Request) error {
 	if !token.Valid {
 		return fmt.Errorf("Invalid token.")
 	}
+	method := r.Method
+	path := r.RequestURI
+	remote := r.RemoteAddr
+	deny := true
+	username := ""
 	if claims, ok := token.Claims.(jwt.MapClaims); ok {
 		user := claims["username"]
-		if user != "admin" && r.Method != "GET" {
-			log.Println("Access denied for user: ", user)
-			return fmt.Errorf("Access denied.")
+		username = user.(string)
+		userdb := usermodel.New(db)
+		userdata, _ := userdb.GetByUsername(username)
+		poldb := policymodel.New(db)
+		poldata, _ := poldb.GetByType(module)
+		for _, p := range poldata {
+			for _, pg := range p.Groups {
+				for _, ug := range userdata.Groups {
+					if ug.Groupname == pg.Groupname {
+						switch p.Action {
+						case "RW":
+							deny = false
+						case "RO":
+							if r.Method == "GET" {
+								deny = false
+							}
+						}
+					}
+				}
+			}
 		}
 	}
+	if deny {
+		log.Printf("Access denied: %s %s %s from %s\n", username, method, path, remote)
+		return fmt.Errorf("Access denied.")
+	}
+	log.Printf("Access granted: %s %s %s from %s\n", username, method, path, remote)
 	return nil
 }

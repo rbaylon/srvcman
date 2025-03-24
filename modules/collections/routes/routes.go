@@ -42,7 +42,8 @@ var tokenAuth *jwtauth.JWTAuth
 
 func CollectionRouter(db collectionmodel.Crud) chi.Router {
 	r := chi.NewRouter()
-	r.Use(security.TokenRequired)
+	dbconn := db.GetDB()
+	r.Use(security.TokenRequired(dbconn, "collections"))
 
 	r.Get("/year/{year}", func(w http.ResponseWriter, r *http.Request) {
 		yyyy := chi.URLParam(r, "year")

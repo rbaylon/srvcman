@@ -33,6 +33,7 @@ type Crud interface {
 	Update(group *Group) error
 	Delete(group *Group) error
 	GetByGroupname(groupname string) (*Group, error)
+	GetDB() *gorm.DB
 }
 
 type Storage struct {
@@ -43,6 +44,10 @@ func New(db *gorm.DB) *Storage {
 	return &Storage{
 		DB: db,
 	}
+}
+
+func (s *Storage) GetDB() *gorm.DB {
+	return s.DB
 }
 
 func (s *Storage) Add(group *Group) error {
