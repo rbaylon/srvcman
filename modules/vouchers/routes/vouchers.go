@@ -28,6 +28,7 @@ package voucherroutes
 import (
 	"fmt"
 	"log"
+	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -44,6 +45,16 @@ import (
 )
 
 var tokenAuth *jwtauth.JWTAuth
+var letters = []byte("abcdefghijkmnopqrstuvwxyzABCDEFGHIJKLMNPQRSTUVWXYZ123456789@!")
+
+type Vreq struct {
+	Hours     int    `json:"hours"`
+	Selleruid string `json:"selleruid"`
+}
+
+func (a *Vreq) Bind(r *http.Request) error {
+	return nil
+}
 
 func VoucherRouter(db vouchermodel.Crud) chi.Router {
 	r := chi.NewRouter()
@@ -167,6 +178,30 @@ func VoucherRouter(db vouchermodel.Crud) chi.Router {
 			return
 		}
 		render.Render(w, r, utils.ErrInvalidRequest(err, "DB error", http.StatusInternalServerError))
+	})
+	r.Post("/generate", func(w http.ResponseWriter, r *http.Request) {
+		v := vouchermodel.Voucher{}
+		vreq := Vreq{}
+		if err := render.Bind(r, &vreq); err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "Bind error", http.StatusBadRequest))
+			return
+		}
+		code := []byte("00000000")
+		maxlen := len(letters) - 1
+		for j := 0; j < 8; j++ {
+			c := letters[rand.IntN(maxlen)]
+			code[j] = c
+		}
+		newcode := string(code)
+		v.Value = newcode
+		v.Hours = vreq.Hours
+		v.Status = "available"
+		v.Downspeed = 3
+		v.Upspeed = 2
+		v.Burstspeed = 5
+		v.Duration = 60000
+		v.Type = vreq.Selleruid
+		render.JSON(w, r, v)
 	})
 	r.Post("/createBulk", func(w http.ResponseWriter, r *http.Request) {
 		vouchers := vouchermodel.Vouchers{}

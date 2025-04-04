@@ -20,6 +20,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/cors"
 	"github.com/go-chi/render"
 	"github.com/rbaylon/srvcman/database"
 	collectionmodel "github.com/rbaylon/srvcman/modules/collections/model"
@@ -100,6 +101,14 @@ func main() {
 
 	r := chi.NewRouter()
 	r.Use(render.SetContentType(render.ContentTypeJSON))
+	r.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   []string{"https://wifi.arkgate.net"}, // Use this to allow specific origin hosts
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+		ExposedHeaders:   []string{"Link"},
+		AllowCredentials: false,
+		MaxAge:           300, // Maximum value not ignored by any of major browsers
+	}))
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ARKGATE API"))
 	})

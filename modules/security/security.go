@@ -37,6 +37,7 @@ func CheckPasswordHash(password, hash string) bool {
 
 func Login(db usermodel.Crud) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log.Println(r.RequestURI, r.Method, r.Header.Get("X-Real-IP"))
 		username, password, ok := r.BasicAuth()
 		if ok {
 			user, err := db.GetByUsername(username)
@@ -104,7 +105,7 @@ func TokenRequired(db *gorm.DB, module string) func(next http.Handler) http.Hand
 }
 
 func createToken(username string) (string, error) {
-	var expiry time.Duration = 24
+	var expiry time.Duration = 1
 	if username == "admin" {
 		expiry = 8760
 	}
@@ -134,7 +135,7 @@ func validateToken(tokenString string, r *http.Request, db *gorm.DB, module stri
 	}
 	method := r.Method
 	path := r.RequestURI
-	remote := r.RemoteAddr
+	remote := r.Header.Get("X-Real-IP")
 	deny := true
 	username := ""
 	if claims, ok := token.Claims.(jwt.MapClaims); ok {
