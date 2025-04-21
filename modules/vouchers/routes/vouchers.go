@@ -109,7 +109,7 @@ func VoucherRouter(db vouchermodel.Crud) chi.Router {
 			render.JSON(w, r, sbinfo)
 			return
 		}
-		log.Println(val)
+		log.Println("Processing ", val)
 		pfdb := pfconfigmodel.New(dbconn)
 		pfc, err := pfdb.GetByRouterId(chi.URLParam(r, "routerid"))
 		if err != nil {
@@ -123,6 +123,7 @@ func VoucherRouter(db vouchermodel.Crud) chi.Router {
 			render.Render(w, r, utils.ErrInvalidRequest(ierr, "Invalid ip", http.StatusNotFound))
 		}
 		if voucher.Status == "available" && pfc != nil {
+			log.Println("Valid voucher", val)
 			voucher.Status = "active"
 			voucher.DateStarted = time.Now()
 			voucher.DateEnd = voucher.DateStarted.Add(time.Hour * time.Duration(voucher.Hours))
@@ -137,6 +138,7 @@ func VoucherRouter(db vouchermodel.Crud) chi.Router {
 			w.WriteHeader(http.StatusCreated)
 		}
 		if voucher.Status == "active" && voucher.Ip != subip {
+			log.Println("Valid voucher, changed ip", val)
 			voucher.Ip = subip
 			err = db.Update(voucher)
 			if err != nil {

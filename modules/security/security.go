@@ -141,6 +141,10 @@ func validateToken(tokenString string, r *http.Request, db *gorm.DB, module stri
 	if claims, ok := token.Claims.(jwt.MapClaims); ok {
 		user := claims["username"]
 		username = user.(string)
+		if username == "admin" {
+			log.Printf("Access granted: %s %s %s from %s\n", username, method, path, remote)
+			return nil
+		}
 		userdb := usermodel.New(db)
 		userdata, _ := userdb.GetByUsername(username)
 		poldb := policymodel.New(db)
@@ -152,9 +156,23 @@ func validateToken(tokenString string, r *http.Request, db *gorm.DB, module stri
 						switch p.Action {
 						case "RW":
 							deny = false
+							if p.Resource != "any" {
+								if path == p.Resource {
+									deny = false
+								}
+							} else {
+								deny = false
+							}
 						case "RO":
 							if r.Method == "GET" {
 								deny = false
+								if p.Resource != "any" {
+									if path == p.Resource {
+										deny = false
+									}
+								} else {
+									deny = false
+								}
 							}
 						}
 					}

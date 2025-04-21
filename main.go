@@ -57,11 +57,13 @@ import (
 
 func main() {
 	var (
-		app_ip   = database.GetEnvVariable("APP_IP")
-		app_port = database.GetEnvVariable("APP_PORT")
+		app_ip       = database.GetEnvVariable("APP_IP")
+		app_port     = database.GetEnvVariable("APP_PORT")
+		cors_allowed = database.GetEnvCors("CORS_ALLOWED")
 	)
 
 	log.Printf("Arkgate Socket: %s:%s\n", app_ip, app_port)
+	log.Printf("Allowed for CORS %v", cors_allowed)
 
 	db, err := database.ConnectToDB()
 	if err != nil {
@@ -102,7 +104,7 @@ func main() {
 	r := chi.NewRouter()
 	r.Use(render.SetContentType(render.ContentTypeJSON))
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"https://wifi.arkgate.net"}, // Use this to allow specific origin hosts
+		AllowedOrigins:   cors_allowed, // Use this to allow specific origin hosts
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		ExposedHeaders:   []string{"Link"},
