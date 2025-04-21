@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile
     container_name: srvcman
     ports:
-      - "8081:8000" # Maps port 8080 on your host to port 80 on the container
+      - "8083:8000" # Maps port 8080 on your host to port 80 on the container
     volumes:
       - ./.env:/build/.env:ro # Mount your static HTML directory
     environment:
