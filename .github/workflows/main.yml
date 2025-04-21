@@ -1,0 +1,25 @@
+name: srvcman API Workflow
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: self-hosted
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: copy env file
+        run: cp /home/odracirb2/srvcmanenv/.env .
+
+      - name: bring down existing container
+        run: docker compose down
+
+      - name: Run care API in docker
+        run: docker compose up --build -d
+
+      - name: Show container logs
+        run: docker logs srvcman
