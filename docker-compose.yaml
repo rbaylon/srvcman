@@ -1,0 +1,21 @@
+services:
+  srvcman:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: srvcman
+    ports:
+      - "8081:8000" # Maps port 8080 on your host to port 80 on the container
+    volumes:
+      - ./.env:/build/.env:ro # Mount your static HTML directory
+    environment:
+      - VIRTUAL_HOST=jr.arkgate.net
+      - VIRTUAL_PORT=8000
+      - LETSENCRYPT_HOST=jr.arkgate.net
+      - WEB_FQDN=jr.arkgate.net
+    networks:
+      - nginx-reverse-proxy
+
+networks:
+  nginx-reverse-proxy:
+    external: true
