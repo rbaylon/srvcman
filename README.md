@@ -1,1 +1,1 @@
-# srvman API
+# srvman API server
