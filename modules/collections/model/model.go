@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	submodel "github.com/rbaylon/srvcman/modules/subs/model"
 	"gorm.io/gorm"
 )
 
@@ -106,6 +107,18 @@ func (s *Storage) GetByYear(y string) ([]Collection, error) {
 	result := s.DB.Where("year = ?", y).Find(&collections)
 	if result.Error != nil {
 		return nil, result.Error
+	}
+	dbconn := s.GetDB()
+	subdb := submodel.New(dbconn)
+	for k, v := range collections {
+		sub, err := subdb.GetById(v.SubID)
+		if err != nil {
+			log.Println("Error getting sub name from collections", err)
+			continue
+		}
+		collections[k].SubName = sub.FirstName + " " + sub.LastName
+		collections[k].SubDue = sub.DueDay
+		collections[k].SubPlan = sub.Plan
 	}
 	return collections, nil
 }
