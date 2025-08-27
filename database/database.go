@@ -43,7 +43,7 @@ func ConnectToDB() (*gorm.DB, error) {
 	//dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=5432 TimeZone=Asia/Singapore",
 	//	dbhost, dbuser, dbpass, dbname)
 	//db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
-	db, err := gorm.Open(sqlite.Open(dbname), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(dbname+".db"), &gorm.Config{})
 	if err != nil {
 		return nil, err
 	}
