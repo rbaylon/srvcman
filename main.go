@@ -27,6 +27,8 @@ import (
 	collectionroutes "github.com/rbaylon/srvcman/modules/collections/routes"
 	dhcpmodel "github.com/rbaylon/srvcman/modules/dhcps/model"
 	dhcproutes "github.com/rbaylon/srvcman/modules/dhcps/routes"
+	fwmodel "github.com/rbaylon/srvcman/modules/firewall/model"
+	fwroutes "github.com/rbaylon/srvcman/modules/firewall/routes"
 	groupmodel "github.com/rbaylon/srvcman/modules/groups/model"
 	grouproutes "github.com/rbaylon/srvcman/modules/groups/routes"
 	paymentmodel "github.com/rbaylon/srvcman/modules/payments/model"
@@ -79,6 +81,7 @@ func main() {
 	pflowmodel.MigrateDB(db)
 	dhcpmodel.MigrateDB(db)
 	submodel.MigrateDB(db)
+	fwmodel.MigrateDB(db)
 	runtimemodel.MigrateDB(db)
 	paymentmodel.MigrateDB(db)
 	tunnelmodel.MigrateDB(db)
@@ -94,6 +97,7 @@ func main() {
 	pfifaceStore := pfifacemodel.New(db)
 	pflowStore := pflowmodel.New(db)
 	subsStore := submodel.New(db)
+	fwStore := fwmodel.New(db)
 	dhcpStore := dhcpmodel.New(db)
 	rtStore := runtimemodel.New(db)
 	paymentStore := paymentmodel.New(db)
@@ -127,6 +131,7 @@ func main() {
 	r.Mount("/api/v1/pfiface", pfifaceroutes.PfifaceRouter(pfifaceStore))
 	r.Mount("/api/v1/pflow", pflowroutes.PflowRouter(pflowStore))
 	r.Mount("/api/v1/subs", subroutes.SubRouter(subsStore))
+	r.Mount("/api/v1/firewall", fwroutes.FwRouter(fwStore))
 	r.Mount("/api/v1/dhcps", dhcproutes.DhcpRouter(dhcpStore))
 	r.Mount("/api/v1/runtime", runtimeroutes.RuntimeRouter(rtStore))
 	r.Mount("/api/v1/payments", paymentroutes.PaymentRouter(paymentStore))
