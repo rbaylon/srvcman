@@ -91,7 +91,7 @@ func (s *Storage) GetAll(option string) ([]Pfrule, error) {
 		for _, v := range Fws {
 			pr.ID = v.ID
 			quick := ""
-			if v.Quick {
+			if v.Quick == "on" {
 				quick = "quick"
 			}
 			pr.Rule = fmt.Sprintf("%s %s %s %s on %s %s %s from %s %s to %s %s %s %d %s\n", v.Action, v.Direction,
