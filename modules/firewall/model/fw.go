@@ -99,6 +99,8 @@ func (s *Storage) GetAll(option string) ([]Pfrule, error) {
 				v.Gateway, v.Priority, v.Pipe)
 			prs = append(prs, pr)
 		}
+	} else {
+		prs = nil
 	}
 	return prs, nil
 }
