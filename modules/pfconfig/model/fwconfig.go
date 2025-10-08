@@ -97,7 +97,7 @@ func (s *Storage) GetAll() ([]Pfconfig, error) {
 
 func (s *Storage) GetById(id uint) (*Pfconfig, error) {
 	var pfconfig Pfconfig
-	result := s.DB.Preload("Ifaces").Preload("Vouchers").Preload("Dhcps").Preload("Subs").First(&pfconfig, id)
+	result := s.DB.Preload("Ifaces").Preload("Dhcps").Preload("Pflows").Preload("Plans").First(&pfconfig, id)
 	if result.Error != nil {
 		return nil, result.Error
 	}

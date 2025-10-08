@@ -2,6 +2,7 @@
 package fwmodel
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 
@@ -43,7 +44,7 @@ func (a *Fw) Bind(r *http.Request) error {
 }
 
 type Crud interface {
-	GetAll() ([]Fw, error)
+	GetAll(opt string) ([]Pfrule, error)
 	GetById(uid uint) (*Fw, error)
 	Add(Fw *Fw) error
 	Update(Fw *Fw) error
@@ -53,6 +54,11 @@ type Crud interface {
 
 type Storage struct {
 	DB *gorm.DB
+}
+
+type Pfrule struct {
+	ID   uint
+	Rule string
 }
 
 func New(db *gorm.DB) *Storage {
@@ -73,13 +79,28 @@ func (s *Storage) Add(Fw *Fw) error {
 	return nil
 }
 
-func (s *Storage) GetAll() ([]Fw, error) {
+func (s *Storage) GetAll(option string) ([]Pfrule, error) {
 	var Fws []Fw
 	result := s.DB.Find(&Fws)
 	if result.Error != nil {
 		return nil, result.Error
 	}
-	return Fws, nil
+	prs := []Pfrule{}
+	if option != "" {
+		pr := Pfrule{}
+		for _, v := range Fws {
+			pr.ID = v.ID
+			quick := ""
+			if v.Quick {
+				quick = "quick"
+			}
+			pr.Rule = fmt.Sprintf("%s %s %s %s on %s %s %s from %s %s to %s %s %s %d %s\n", v.Action, v.Direction,
+				v.Log, quick, v.Interface, v.AddressFamily, v.Proto, v.Source, v.SrcPort, v.Destination, v.DstPort,
+				v.Gateway, v.Priority, v.Pipe)
+			prs = append(prs, pr)
+		}
+	}
+	return prs, nil
 }
 
 func (s *Storage) GetById(id uint) (*Fw, error) {

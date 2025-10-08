@@ -48,7 +48,8 @@ func FwRouter(db fwmodel.Crud) chi.Router {
 	r.Use(security.TokenRequired(dbconn, "Fws"))
 
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		res, errdb := db.GetAll()
+		opt := r.URL.Query().Get("option")
+		res, errdb := db.GetAll(opt)
 		if errdb != nil {
 			render.Render(w, r, utils.ErrInvalidRequest(errdb, "DB error", http.StatusInternalServerError))
 			return
