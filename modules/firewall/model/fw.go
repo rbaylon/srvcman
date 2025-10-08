@@ -94,9 +94,33 @@ func (s *Storage) GetAll(option string) ([]Pfrule, error) {
 			if v.Quick == "on" {
 				quick = "quick"
 			}
-			pr.Rule = fmt.Sprintf("%s %s %s %s on %s %s %s from %s %s to %s %s %s %d %s\n", v.Action, v.Direction,
-				v.Log, quick, v.Interface, v.AddressFamily, v.Proto, v.Source, v.SrcPort, v.Destination, v.DstPort,
-				v.Gateway, v.Priority, v.Pipe)
+			iface := v.Interface
+			if v.Interface != "any" {
+				iface = "on " + v.Interface
+			}
+			proto := v.Proto
+			if v.Proto != "" {
+				proto = "proto " + v.Proto
+			}
+			sport := v.SrcPort
+			if v.SrcPort != "" {
+				sport = "port " + v.SrcPort
+			}
+			dport := v.DstPort
+			if v.DstPort != "" {
+				dport = "port " + v.DstPort
+			}
+			gw := v.Gateway
+			if v.Gateway != "" {
+				gw = "route-to " + v.Gateway
+			}
+			prio := ""
+			if v.Priority > 0 {
+				prio = fmt.Sprintf("set prio %d", v.Priority)
+			}
+			pr.Rule = fmt.Sprintf("%s %s %s %s %s %s %s from %s %s to %s %s %s %s %s %s\n", v.Action, v.Direction,
+				v.Log, quick, iface, v.AddressFamily, proto, v.Source, sport, v.Destination, dport,
+				gw, prio, v.Pipe, v.AdvanceOpts)
 			prs = append(prs, pr)
 		}
 	} else {
