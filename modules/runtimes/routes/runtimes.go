@@ -73,7 +73,6 @@ func RuntimeRouter(db runtimemodel.Crud) chi.Router {
 			return
 		}
 		render.Render(w, r, utils.ErrInvalidRequest(err, "DB delete error", http.StatusInternalServerError))
-		return
 	})
 	r.Post("/create", func(w http.ResponseWriter, r *http.Request) {
 		rt := &runtimemodel.Runtime{}

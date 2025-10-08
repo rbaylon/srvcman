@@ -15,7 +15,7 @@ type Fw struct {
 	Action        string `json:"action"`
 	Direction     string `json:"direction"`
 	Log           string `json:"log"`
-	Quick         bool   `json:"quick"`
+	Quick         string `json:"quick"`
 	Interface     string `json:"interface"`
 	AddressFamily string `json:"address_family"`
 	Proto         string `json:"protocol"`
