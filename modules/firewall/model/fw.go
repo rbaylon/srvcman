@@ -123,34 +123,37 @@ func ToRule(s *Storage, v *Fw) {
 	}
 	plan := planmodel.Plan{}
 	result := s.DB.Where("plan = ?", v.Pipe).First(&plan)
+	q := true
 	if result.Error != nil {
 		log.Println("DB errror on Plans: ", result.Error)
-	} else {
-		uid := GenRandomString()
-		pfifaces := []pfifacemodel.Pfiface{}
-		result := s.DB.Find(&pfifaces)
-		if result.Error != nil {
-			log.Println("DB errror on Plans: ", result.Error)
+		q = false
+	}
+	uid := GenRandomString()
+	pfifaces := []pfifacemodel.Pfiface{}
+	result = s.DB.Find(&pfifaces)
+	if result.Error != nil {
+		log.Println("DB errror on Plans: ", result.Error)
+	}
+	pipe := ""
+	for _, i := range pfifaces {
+		if i.Type == "external" && q {
+			v.QRule = fmt.Sprintf(
+				"%squeue %s%s parent %s bandwidth %dM min 5M max %dM qlimit 1024\n",
+				v.QRule, uid, i.Name, i.Name, plan.Upspeed, plan.Upspeed)
+			v.OutRule = fmt.Sprintf(
+				"%spass out on $%s set queue (%s%s, %slow)  tagged \"%s\"",
+				v.OutRule, i.Name, uid, i.Name, i.Name, uid)
 		}
-		pipe := ""
-		for _, i := range pfifaces {
-			if i.Type == "external" {
-				v.QRule = fmt.Sprintf(
-					"%squeue %s%s parent %s bandwidth %dM min 5M max %dM qlimit 1024\n",
-					v.QRule, uid, i.Name, i.Name, plan.Upspeed, plan.Upspeed)
-				v.OutRule = fmt.Sprintf(
-					"%spass out on $%s set queue (%s%s, %slow)  tagged \"%s\"",
-					v.OutRule, i.Name, uid, i.Name, i.Name, uid)
-			} else if v.Interface == i.Device {
+		if v.Interface == i.Device {
+			if q {
 				v.QRule = fmt.Sprintf(
 					"%squeue %s%s parent %s bandwidth %dM min 5M max %dM qlimit 1024\n",
 					v.QRule, uid, i.Name, i.Name, plan.Downspeed, plan.Downspeed)
-
 				pipe = fmt.Sprintf("set queue (%s%s, %slow)  tag \"%s\"", uid, i.Name, i.Name, uid)
-				v.Rule = fmt.Sprintf("%s %s %s %s %s %s %s from %s %s to %s %s %s %s %s %s\n",
-					v.Action, v.Direction, v.Log, quick, iface, v.AddressFamily, proto, v.Source,
-					sport, v.Destination, dport, gw, prio, pipe, v.AdvanceOpts)
 			}
+			v.Rule = fmt.Sprintf("%s %s %s %s %s %s %s from %s %s to %s %s %s %s %s %s\n",
+				v.Action, v.Direction, v.Log, quick, iface, v.AddressFamily, proto, v.Source,
+				sport, v.Destination, dport, gw, prio, pipe, v.AdvanceOpts)
 		}
 	}
 }
