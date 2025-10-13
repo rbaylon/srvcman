@@ -45,7 +45,7 @@ import (
 )
 
 var tokenAuth *jwtauth.JWTAuth
-var letters = []byte("abcdefghijkmnopqrstuvwxyzABCDEFGHIJKLMNPQRSTUVWXYZ123456789@!")
+var letters = []byte("abcdefghijkmnopqrstuvwxyzABCDEFGHIJKLMNPQRSTUVWXYZ123456789")
 
 type Vreq struct {
 	Hours     int    `json:"hours"`

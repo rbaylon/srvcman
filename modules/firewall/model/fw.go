@@ -4,8 +4,11 @@ package fwmodel
 import (
 	"fmt"
 	"log"
+	"math/rand/v2"
 	"net/http"
 
+	pfifacemodel "github.com/rbaylon/srvcman/modules/pfifaces/model"
+	planmodel "github.com/rbaylon/srvcman/modules/plans/model"
 	"gorm.io/gorm"
 )
 
@@ -28,6 +31,9 @@ type Fw struct {
 	PfconfigID    uint   `json:"pfconfig_id"`
 	Pipe          string `json:"pipe"`
 	AdvanceOpts   string `json:"advance_options"`
+	Rule          string
+	OutRule       string
+	QRule         string
 }
 
 // MigrateDB - Create the table if not exist in DB
@@ -44,7 +50,7 @@ func (a *Fw) Bind(r *http.Request) error {
 }
 
 type Crud interface {
-	GetAll(opt string) ([]Pfrule, error)
+	GetAll(opt string) ([]Fw, error)
 	GetById(uid uint) (*Fw, error)
 	Add(Fw *Fw) error
 	Update(Fw *Fw) error
@@ -54,11 +60,6 @@ type Crud interface {
 
 type Storage struct {
 	DB *gorm.DB
-}
-
-type Pfrule struct {
-	ID   uint
-	Rule string
 }
 
 func New(db *gorm.DB) *Storage {
@@ -72,6 +73,7 @@ func (s *Storage) GetDB() *gorm.DB {
 }
 
 func (s *Storage) Add(Fw *Fw) error {
+	ToRule(s, Fw)
 	result := s.DB.Create(Fw)
 	if result.Error != nil {
 		return result.Error
@@ -79,54 +81,87 @@ func (s *Storage) Add(Fw *Fw) error {
 	return nil
 }
 
-func (s *Storage) GetAll(option string) ([]Pfrule, error) {
+func GenRandomString() string {
+	var letters = []byte("abcdefghijkmnopqrstuvwxyzABCDEFGHIJKLMNPQRSTUVWXYZ123456789")
+	code := []byte("00000000")
+	maxlen := len(letters) - 1
+	for j := 0; j < 8; j++ {
+		c := letters[rand.IntN(maxlen)]
+		code[j] = c
+	}
+	return string(code)
+}
+
+func ToRule(s *Storage, v *Fw) {
+	quick := ""
+	if v.Quick == "on" {
+		quick = "quick"
+	}
+	iface := v.Interface
+	if v.Interface != "any" {
+		iface = "on " + v.Interface
+	}
+	proto := v.Proto
+	if v.Proto != "" {
+		proto = "proto " + v.Proto
+	}
+	sport := v.SrcPort
+	if v.SrcPort != "" {
+		sport = "port " + v.SrcPort
+	}
+	dport := v.DstPort
+	if v.DstPort != "" {
+		dport = "port " + v.DstPort
+	}
+	gw := v.Gateway
+	if v.Gateway != "" {
+		gw = "route-to " + v.Gateway
+	}
+	prio := ""
+	if v.Priority > 0 {
+		prio = fmt.Sprintf("set prio %d", v.Priority)
+	}
+	plan := planmodel.Plan{}
+	result := s.DB.Where("plan = ?", v.Pipe).First(&plan)
+	if result.Error != nil {
+		log.Println("DB errror on Plans: ", result.Error)
+	} else {
+		uid := GenRandomString()
+		pfifaces := []pfifacemodel.Pfiface{}
+		result := s.DB.Find(&pfifaces)
+		if result.Error != nil {
+			log.Println("DB errror on Plans: ", result.Error)
+		}
+		pipe := ""
+		for _, i := range pfifaces {
+			if i.Type == "external" {
+				v.QRule = fmt.Sprintf(
+					"%squeue %s%s parent %s bandwidth %dM min 5M max %dM qlimit 1024\n",
+					v.QRule, uid, i.Name, i.Name, plan.Upspeed, plan.Upspeed)
+				v.OutRule = fmt.Sprintf(
+					"%spass out on $%s set queue (%s%s, %slow)  tagged \"%s\"",
+					v.OutRule, i.Name, uid, i.Name, i.Name, uid)
+			} else if v.Interface == i.Device {
+				v.QRule = fmt.Sprintf(
+					"%squeue %s%s parent %s bandwidth %dM min 5M max %dM qlimit 1024\n",
+					v.QRule, uid, i.Name, i.Name, plan.Downspeed, plan.Downspeed)
+
+				pipe = fmt.Sprintf("set queue (%s%s, %slow)  tag \"%s\"", uid, i.Name, i.Name, uid)
+				v.Rule = fmt.Sprintf("%s %s %s %s %s %s %s from %s %s to %s %s %s %s %s %s\n",
+					v.Action, v.Direction, v.Log, quick, iface, v.AddressFamily, proto, v.Source,
+					sport, v.Destination, dport, gw, prio, pipe, v.AdvanceOpts)
+			}
+		}
+	}
+}
+
+func (s *Storage) GetAll(option string) ([]Fw, error) {
 	var Fws []Fw
 	result := s.DB.Find(&Fws)
 	if result.Error != nil {
 		return nil, result.Error
 	}
-	prs := []Pfrule{}
-	if option != "" {
-		pr := Pfrule{}
-		for _, v := range Fws {
-			pr.ID = v.ID
-			quick := ""
-			if v.Quick == "on" {
-				quick = "quick"
-			}
-			iface := v.Interface
-			if v.Interface != "any" {
-				iface = "on " + v.Interface
-			}
-			proto := v.Proto
-			if v.Proto != "" {
-				proto = "proto " + v.Proto
-			}
-			sport := v.SrcPort
-			if v.SrcPort != "" {
-				sport = "port " + v.SrcPort
-			}
-			dport := v.DstPort
-			if v.DstPort != "" {
-				dport = "port " + v.DstPort
-			}
-			gw := v.Gateway
-			if v.Gateway != "" {
-				gw = "route-to " + v.Gateway
-			}
-			prio := ""
-			if v.Priority > 0 {
-				prio = fmt.Sprintf("set prio %d", v.Priority)
-			}
-			pr.Rule = fmt.Sprintf("%s %s %s %s %s %s %s from %s %s to %s %s %s %s %s %s\n", v.Action, v.Direction,
-				v.Log, quick, iface, v.AddressFamily, proto, v.Source, sport, v.Destination, dport,
-				gw, prio, v.Pipe, v.AdvanceOpts)
-			prs = append(prs, pr)
-		}
-	} else {
-		prs = nil
-	}
-	return prs, nil
+	return Fws, nil
 }
 
 func (s *Storage) GetById(id uint) (*Fw, error) {
