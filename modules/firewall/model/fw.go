@@ -105,9 +105,17 @@ func ToRule(s *Storage, v *Fw) {
 	if v.Proto != "" {
 		proto = "proto " + v.Proto
 	}
+	src := v.Source
+	if v.Source == "" {
+		src = "any"
+	}
 	sport := v.SrcPort
 	if v.SrcPort != "" {
 		sport = "port " + v.SrcPort
+	}
+	dst := v.Destination
+	if v.Source == "" {
+		dst = "any"
 	}
 	dport := v.DstPort
 	if v.DstPort != "" {
@@ -152,8 +160,8 @@ func ToRule(s *Storage, v *Fw) {
 				pipe = fmt.Sprintf("set queue (%s%s, %slow)  tag \"%s\"", uid, i.Name, i.Name, uid)
 			}
 			v.Rule = fmt.Sprintf("%s %s %s %s %s %s %s from %s %s to %s %s %s %s %s %s\n",
-				v.Action, v.Direction, v.Log, quick, iface, v.AddressFamily, proto, v.Source,
-				sport, v.Destination, dport, gw, prio, pipe, v.AdvanceOpts)
+				v.Action, v.Direction, v.Log, quick, iface, v.AddressFamily, proto, src,
+				sport, dst, dport, gw, prio, pipe, v.AdvanceOpts)
 		}
 	}
 }
