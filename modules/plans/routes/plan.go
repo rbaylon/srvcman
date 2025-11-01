@@ -28,6 +28,7 @@ package planroutes
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -88,7 +89,7 @@ func PlanRouter(db planmodel.Crud) chi.Router {
 			json.NewEncoder(w).Encode(&plan)
 			return
 		}
-		json.NewEncoder(w).Encode(map[string]string{"Error": fmt.Sprintf("Error updating record for plan  ID")})
+		json.NewEncoder(w).Encode(map[string]string{"Error": "Error updating record for plan  ID"})
 	})
 	r.Post("/create", func(w http.ResponseWriter, r *http.Request) {
 		plan := planmodel.Plan{}
@@ -107,6 +108,7 @@ func PlanRouter(db planmodel.Crud) chi.Router {
 	})
 	r.Delete("/{planId}", func(w http.ResponseWriter, r *http.Request) {
 		id, err := strconv.Atoi(chi.URLParam(r, "planId"))
+		log.Println("About to delete Plan:", id)
 		w.Header().Set("Content-Type", "application/json")
 		if err != nil {
 			json.NewEncoder(w).Encode(map[string]string{"Error": fmt.Sprintf("Atoi error %s", err)})
@@ -119,10 +121,11 @@ func PlanRouter(db planmodel.Crud) chi.Router {
 		}
 		err = db.Delete(plan)
 		if err == nil {
+			log.Println("Deleted Plan:", id)
 			json.NewEncoder(w).Encode(&plan)
 			return
 		}
-		json.NewEncoder(w).Encode(map[string]string{"Error": fmt.Sprintf("Error deleting record for plan ID")})
+		json.NewEncoder(w).Encode(map[string]string{"Error": "Error deleting record for plan ID"})
 	})
 	return r
 }
