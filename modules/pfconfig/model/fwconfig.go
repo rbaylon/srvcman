@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	dhcpmodel "github.com/rbaylon/srvcman/modules/dhcps/model"
+	fwmodel "github.com/rbaylon/srvcman/modules/firewall/model"
 	pfifacemodel "github.com/rbaylon/srvcman/modules/pfifaces/model"
 	pflowmodel "github.com/rbaylon/srvcman/modules/pflows/model"
 	planmodel "github.com/rbaylon/srvcman/modules/plans/model"
@@ -30,6 +31,7 @@ type Pfconfig struct {
 	Pflows            []pflowmodel.Pflow     `json:"pflows"`
 	Workername        string                 `json:"workername"`
 	Plans             []planmodel.Plan       `json:"plans"`
+	Rules             []fwmodel.Fw           `json:"rules"`
 }
 
 // MigrateDB - Create the table if not exist in DB
@@ -106,7 +108,10 @@ func (s *Storage) GetById(id uint) (*Pfconfig, error) {
 
 func (s *Storage) GetByRouterId(value string) (*Pfconfig, error) {
 	var pfconfig Pfconfig
-	result := s.DB.Where("Router = ?", value).Preload("Ifaces").Preload("Vouchers").Preload("Dhcps").Preload("Subs").Preload("Pflows").Preload("Plans").First(&pfconfig)
+	result := s.DB.Where("Router = ?", value).Preload(
+		"Ifaces").Preload("Vouchers").Preload("Dhcps").Preload(
+		"Subs").Preload("Pflows").Preload("Plans").Preload(
+		"Rules").First(&pfconfig)
 	if result.Error != nil {
 		return nil, result.Error
 	}

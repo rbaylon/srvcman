@@ -185,6 +185,7 @@ func (s *Storage) GetById(id uint) (*Fw, error) {
 }
 
 func (s *Storage) Update(Fw *Fw) error {
+	ToRule(s, Fw)
 	result := s.DB.Save(Fw)
 	if result.Error != nil {
 		return result.Error
