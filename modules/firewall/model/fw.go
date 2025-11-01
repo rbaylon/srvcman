@@ -114,7 +114,7 @@ func ToRule(s *Storage, v *Fw) {
 		sport = "port " + v.SrcPort
 	}
 	dst := v.Destination
-	if v.Source == "" {
+	if v.Destination == "" {
 		dst = "any"
 	}
 	dport := v.DstPort
