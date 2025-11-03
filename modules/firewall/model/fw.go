@@ -143,25 +143,29 @@ func ToRule(s *Storage, v *Fw) {
 		log.Println("DB errror on Plans: ", result.Error)
 	}
 	pipe := ""
+	tag := ""
 	for _, i := range pfifaces {
 		if i.Type == "external" && q {
-			v.QRule = fmt.Sprintf(
-				"%squeue %s%s parent %s bandwidth %dM min 5M max %dM qlimit 1024\n",
-				v.QRule, uid, i.Name, i.Name, plan.Upspeed, plan.Upspeed)
-			v.OutRule = fmt.Sprintf(
-				"%spass out on $%s set queue (%s%s, %slow)  tagged \"%s\"",
-				v.OutRule, i.Name, uid, i.Name, i.Name, uid)
+			if q {
+				v.QRule = fmt.Sprintf(
+					"%squeue %s%s parent %s bandwidth %dM min 5M max %dM qlimit 1024\n",
+					v.QRule, uid, i.Name, i.Name, plan.Upspeed, plan.Upspeed)
+				v.OutRule = fmt.Sprintf(
+					"%spass out on $%s set queue (%s%s, %slow)  tagged \"%s\"\n",
+					v.OutRule, i.Name, uid, i.Name, i.Name, uid)
+			}
 		}
 		if v.Interface == i.Device {
 			if q {
 				v.QRule = fmt.Sprintf(
 					"%squeue %s%s parent %s bandwidth %dM min 5M max %dM qlimit 1024\n",
 					v.QRule, uid, i.Name, i.Name, plan.Downspeed, plan.Downspeed)
-				pipe = fmt.Sprintf("set queue (%s%s, %slow)  tag \"%s\"", uid, i.Name, i.Name, uid)
+				pipe = fmt.Sprintf("set queue (%s%s, %slow)", uid, i.Name, i.Name)
+				tag = fmt.Sprintf("tag \"%s\"", uid)
 			}
-			v.Rule = fmt.Sprintf("%s %s %s %s %s %s %s from %s %s to %s %s %s %s %s %s\n",
+			v.Rule = fmt.Sprintf("%s %s %s %s %s %s %s from %s %s to %s %s %s %s %s %s %s\n",
 				v.Action, v.Direction, v.Log, quick, iface, v.AddressFamily, proto, src,
-				sport, dst, dport, gw, prio, pipe, v.AdvanceOpts)
+				sport, dst, dport, gw, prio, pipe, v.AdvanceOpts, tag)
 		}
 	}
 }
