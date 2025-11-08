@@ -43,6 +43,8 @@ import (
 	planroutes "github.com/rbaylon/srvcman/modules/plans/routes"
 	policymodel "github.com/rbaylon/srvcman/modules/policies/model"
 	policyroutes "github.com/rbaylon/srvcman/modules/policies/routes"
+	pppoemodel "github.com/rbaylon/srvcman/modules/pppoes/model"
+	pppoeroutes "github.com/rbaylon/srvcman/modules/pppoes/routes"
 	runtimemodel "github.com/rbaylon/srvcman/modules/runtimes/model"
 	runtimeroutes "github.com/rbaylon/srvcman/modules/runtimes/routes"
 	"github.com/rbaylon/srvcman/modules/security"
@@ -88,6 +90,7 @@ func main() {
 	collectionmodel.MigrateDB(db)
 	planmodel.MigrateDB(db)
 	policymodel.MigrateDB(db)
+	pppoemodel.MigrateDB(db)
 
 	userStore := usermodel.New(db)
 	groupStore := groupmodel.New(db)
@@ -104,6 +107,7 @@ func main() {
 	tunnelStore := tunnelmodel.New(db)
 	collectionStore := collectionmodel.New(db)
 	planStore := planmodel.New(db)
+	pppoeStore := pppoemodel.New(db)
 
 	r := chi.NewRouter()
 	r.Use(render.SetContentType(render.ContentTypeJSON))
@@ -138,6 +142,7 @@ func main() {
 	r.Mount("/api/v1/tunnels", tunnelroutes.TunnelRouter(tunnelStore))
 	r.Mount("/api/v1/collections", collectionroutes.CollectionRouter(collectionStore))
 	r.Mount("/api/v1/plans", planroutes.PlanRouter(planStore))
+	r.Mount("/api/v1/pppoe", pppoeroutes.PppoeRouter(pppoeStore))
 	go utils.CheckExpired(voucherStore)
 	http.ListenAndServe(fmt.Sprintf("%s:%s", app_ip, app_port), r)
 }
