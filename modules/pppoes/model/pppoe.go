@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	pfifacemodel "github.com/rbaylon/srvcman/modules/pfifaces/model"
 	"gorm.io/gorm"
 )
 
@@ -65,9 +66,20 @@ func (s *Storage) GetDB() *gorm.DB {
 }
 
 func (s *Storage) Add(pppoe *Pppoe) error {
+	pfiface := pfifacemodel.Pfiface{}
+	pfiface.Name = pppoe.Name
+	pfiface.Device = "pppac0"
+	pfiface.PfconfigID = pppoe.PfconfigID
+	pfiface.Ip = pppoe.Ip
+	pfiface.Type = "internal"
+	pfiface.Default = false
 	result := s.DB.Create(pppoe)
 	if result.Error != nil {
 		return result.Error
+	}
+	ifaceres := s.DB.Create(pfiface)
+	if ifaceres.Error != nil {
+		return ifaceres.Error
 	}
 	return nil
 }
@@ -100,17 +112,36 @@ func (s *Storage) GetBypppoeValue(value string) (*Pppoe, error) {
 }
 
 func (s *Storage) Update(pppoe *Pppoe) error {
+	pfiface := pfifacemodel.Pfiface{}
+	presult := s.DB.Where("Device = ?", "pppac0").First(&pfiface)
+	if presult.Error != nil {
+		return presult.Error
+	}
+	pfiface.Ip = pppoe.Ip
 	result := s.DB.Save(pppoe)
 	if result.Error != nil {
 		return result.Error
+	}
+	puresult := s.DB.Save(pfiface)
+	if puresult.Error != nil {
+		return puresult.Error
 	}
 	return nil
 }
 
 func (s *Storage) Delete(pppoe *Pppoe) error {
+	pfiface := pfifacemodel.Pfiface{}
+	presult := s.DB.Where("Device = ?", "pppac0").First(&pfiface)
+	if presult.Error != nil {
+		return presult.Error
+	}
 	result := s.DB.Delete(pppoe)
 	if result.Error != nil {
 		return result.Error
+	}
+	pdresult := s.DB.Delete(pfiface)
+	if result.Error != nil {
+		return pdresult.Error
 	}
 	return nil
 }
