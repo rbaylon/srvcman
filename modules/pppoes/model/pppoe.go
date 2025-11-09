@@ -77,7 +77,7 @@ func (s *Storage) Add(pppoe *Pppoe) error {
 	if result.Error != nil {
 		return result.Error
 	}
-	ifaceres := s.DB.Create(pfiface)
+	ifaceres := s.DB.Create(&pfiface)
 	if ifaceres.Error != nil {
 		return ifaceres.Error
 	}
@@ -118,7 +118,7 @@ func (s *Storage) Update(pppoe *Pppoe) error {
 		log.Println("PPP interface update error:", presult.Error)
 	} else {
 		pfiface.Ip = pppoe.Ip
-		puresult := s.DB.Save(pfiface)
+		puresult := s.DB.Save(&pfiface)
 		if puresult.Error != nil {
 			return puresult.Error
 		}
@@ -136,7 +136,7 @@ func (s *Storage) Delete(pppoe *Pppoe) error {
 	if presult.Error != nil {
 		log.Println("PPP interface delete error:", presult.Error)
 	} else {
-		pdresult := s.DB.Delete(pfiface)
+		pdresult := s.DB.Delete(&pfiface)
 		if pdresult.Error != nil {
 			return pdresult.Error
 		}
