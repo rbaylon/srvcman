@@ -116,15 +116,16 @@ func (s *Storage) Update(pppoe *Pppoe) error {
 	presult := s.DB.Where("Device = ?", "pppac0").First(&pfiface)
 	if presult.Error != nil {
 		log.Println("PPP interface update error:", presult.Error)
+	} else {
+		puresult := s.DB.Save(pfiface)
+		if puresult.Error != nil {
+			return puresult.Error
+		}
 	}
 	pfiface.Ip = pppoe.Ip
 	result := s.DB.Save(pppoe)
 	if result.Error != nil {
 		return result.Error
-	}
-	puresult := s.DB.Save(pfiface)
-	if puresult.Error != nil {
-		return puresult.Error
 	}
 	return nil
 }
@@ -134,14 +135,15 @@ func (s *Storage) Delete(pppoe *Pppoe) error {
 	presult := s.DB.Where("Device = ?", "pppac0").First(&pfiface)
 	if presult.Error != nil {
 		log.Println("PPP interface delete error:", presult.Error)
+	} else {
+		pdresult := s.DB.Delete(pfiface)
+		if pdresult.Error != nil {
+			return pdresult.Error
+		}
 	}
 	result := s.DB.Delete(pppoe)
 	if result.Error != nil {
 		return result.Error
-	}
-	pdresult := s.DB.Delete(pfiface)
-	if result.Error != nil {
-		return pdresult.Error
 	}
 	return nil
 }
