@@ -117,12 +117,12 @@ func (s *Storage) Update(pppoe *Pppoe) error {
 	if presult.Error != nil {
 		log.Println("PPP interface update error:", presult.Error)
 	} else {
+		pfiface.Ip = pppoe.Ip
 		puresult := s.DB.Save(pfiface)
 		if puresult.Error != nil {
 			return puresult.Error
 		}
 	}
-	pfiface.Ip = pppoe.Ip
 	result := s.DB.Save(pppoe)
 	if result.Error != nil {
 		return result.Error
