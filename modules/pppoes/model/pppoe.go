@@ -126,7 +126,6 @@ func (s *Storage) Update(pppoe *Pppoe) error {
 		log.Println("PPP interface update error:", presult.Error)
 	} else {
 		pfiface.Ip = pppoe.Ip
-		pfiface.Device = pppoe.Device
 		pfiface.Name = pppoe.Name
 		puresult := s.DB.Save(&pfiface)
 		if puresult.Error != nil {
