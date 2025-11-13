@@ -67,12 +67,19 @@ func (s *Storage) GetDB() *gorm.DB {
 
 func (s *Storage) Add(pppoe *Pppoe) error {
 	pfiface := pfifacemodel.Pfiface{}
+	parentdevice := pfifacemodel.Pfiface{}
+	presult := s.DB.Where("Device = ?", pppoe.Device).First(&parentdevice)
+	if presult.Error != nil {
+		return presult.Error
+	}
 	pfiface.Name = pppoe.Name
 	pfiface.Device = "pppac0"
 	pfiface.PfconfigID = pppoe.PfconfigID
 	pfiface.Ip = pppoe.Ip
 	pfiface.Type = "internal"
 	pfiface.Default = false
+	pfiface.Speed = parentdevice.Speed
+	pfiface.Netmask = parentdevice.Netmask
 	result := s.DB.Create(pppoe)
 	if result.Error != nil {
 		return result.Error
