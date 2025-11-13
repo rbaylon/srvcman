@@ -80,6 +80,7 @@ func (s *Storage) Add(pppoe *Pppoe) error {
 	pfiface.Default = false
 	pfiface.Speed = parentdevice.Speed
 	pfiface.Netmask = parentdevice.Netmask
+	pfiface.Gateway = parentdevice.Gateway
 	result := s.DB.Create(pppoe)
 	if result.Error != nil {
 		return result.Error
@@ -125,6 +126,8 @@ func (s *Storage) Update(pppoe *Pppoe) error {
 		log.Println("PPP interface update error:", presult.Error)
 	} else {
 		pfiface.Ip = pppoe.Ip
+		pfiface.Device = pppoe.Device
+		pfiface.Name = pppoe.Name
 		puresult := s.DB.Save(&pfiface)
 		if puresult.Error != nil {
 			return puresult.Error
