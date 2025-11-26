@@ -41,6 +41,7 @@ type Crud interface {
 	Delete(pppoe *Pppoe) error
 	GetBypppoeValue(value string) (*Pppoe, error)
 	GetDB() *gorm.DB
+	GetByPfconfigId(id uint) (*Pppoe, error)
 }
 
 type Storage struct {
@@ -113,6 +114,15 @@ func (s *Storage) GetById(id uint) (*Pppoe, error) {
 func (s *Storage) GetBypppoeValue(value string) (*Pppoe, error) {
 	var pppoe Pppoe
 	result := s.DB.Where("Value = ?", value).First(&pppoe)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return &pppoe, nil
+}
+
+func (s *Storage) GetByPfconfigId(id uint) (*Pppoe, error) {
+	var pppoe Pppoe
+	result := s.DB.Where("PfconfigID = ?", id).First(&pppoe)
 	if result.Error != nil {
 		return nil, result.Error
 	}
