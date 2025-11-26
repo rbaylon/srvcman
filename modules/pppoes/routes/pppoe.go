@@ -67,9 +67,9 @@ func PppoeRouter(db pppoemodel.Crud) chi.Router {
 		render.JSON(w, r, pppoe)
 	})
 	r.Get("/pfconfig/{pfconfigId}", func(w http.ResponseWriter, r *http.Request) {
-		id, err := strconv.Atoi(chi.URLParam(r, "pfconfigID"))
+		id, err := strconv.Atoi(chi.URLParam(r, "pfconfigId"))
 		if err != nil {
-			render.Render(w, r, utils.ErrInvalidRequest(err, fmt.Sprintf("Invalid pppoe ID %s", chi.URLParam(r, "pfconfigID")), http.StatusBadRequest))
+			render.Render(w, r, utils.ErrInvalidRequest(err, fmt.Sprintf("Invalid pfconfig ID %s", chi.URLParam(r, "pfconfigId")), http.StatusBadRequest))
 			return
 		}
 		pppoe, err := db.GetByPfconfigId(uint(id))
