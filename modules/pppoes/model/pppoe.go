@@ -122,7 +122,7 @@ func (s *Storage) GetBypppoeValue(value string) (*Pppoe, error) {
 
 func (s *Storage) GetByPfconfigId(id uint) (*Pppoe, error) {
 	var pppoe Pppoe
-	result := s.DB.Where("PfconfigID = ?", id).First(&pppoe)
+	result := s.DB.Where("pfconfig_id = ?", id).First(&pppoe)
 	if result.Error != nil {
 		return nil, result.Error
 	}
