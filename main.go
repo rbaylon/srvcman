@@ -54,6 +54,8 @@ import (
 	tunnelroutes "github.com/rbaylon/srvcman/modules/tunnels/routes"
 	usermodel "github.com/rbaylon/srvcman/modules/users/model"
 	userroutes "github.com/rbaylon/srvcman/modules/users/routes"
+	vlanmodel "github.com/rbaylon/srvcman/modules/vlans/model"
+	vlanroutes "github.com/rbaylon/srvcman/modules/vlans/routes"
 	vouchermodel "github.com/rbaylon/srvcman/modules/vouchers/model"
 	voucherroutes "github.com/rbaylon/srvcman/modules/vouchers/routes"
 	"github.com/rbaylon/srvcman/utils"
@@ -91,6 +93,7 @@ func main() {
 	planmodel.MigrateDB(db)
 	policymodel.MigrateDB(db)
 	pppoemodel.MigrateDB(db)
+	vlanmodel.MigrateDB(db)
 
 	userStore := usermodel.New(db)
 	groupStore := groupmodel.New(db)
@@ -108,6 +111,7 @@ func main() {
 	collectionStore := collectionmodel.New(db)
 	planStore := planmodel.New(db)
 	pppoeStore := pppoemodel.New(db)
+	vlanStore := vlanmodel.New(db)
 
 	r := chi.NewRouter()
 	r.Use(render.SetContentType(render.ContentTypeJSON))
@@ -143,6 +147,7 @@ func main() {
 	r.Mount("/api/v1/collections", collectionroutes.CollectionRouter(collectionStore))
 	r.Mount("/api/v1/plans", planroutes.PlanRouter(planStore))
 	r.Mount("/api/v1/pppoe", pppoeroutes.PppoeRouter(pppoeStore))
+	r.Mount("/api/v1/vlans", vlanroutes.VlanRouter(vlanStore))
 	go utils.CheckExpired(voucherStore)
 	http.ListenAndServe(fmt.Sprintf("%s:%s", app_ip, app_port), r)
 }

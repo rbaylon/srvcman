@@ -23,7 +23,7 @@
 //	    Return-Status: 200 on Success
 //	                   500 on Error
 //	                   400 on Bad request
-package vlanroutes
+package Vlanroutes
 
 import (
 	"fmt"
@@ -42,7 +42,7 @@ import (
 
 var tokenAuth *jwtauth.JWTAuth
 
-func vlanRouter(db vlanmodel.Crud) chi.Router {
+func VlanRouter(db vlanmodel.Crud) chi.Router {
 	r := chi.NewRouter()
 	dbconn := db.GetDB()
 	r.Use(security.TokenRequired(dbconn, "vlans"))
