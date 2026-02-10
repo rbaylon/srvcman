@@ -15,7 +15,7 @@ type Vlan struct {
 	VlanTag      int    `json:"vlan_tag"`
 	PfconfigID   uint   `json:"pfconfig_id"`
 	RxPrio       int    `json:"rx_prio"`
-	TxPrio       int    `json:"txprio"`
+	TxPrio       int    `json:"tx_prio"`
 }
 
 // MigrateDB - Create the table if not exist in DB
