@@ -27,14 +27,12 @@ package Vlanroutes
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/jwtauth/v5"
 	"github.com/go-chi/render"
-	runtimemodel "github.com/rbaylon/srvcman/modules/runtimes/model"
 	"github.com/rbaylon/srvcman/modules/security"
 	vlanmodel "github.com/rbaylon/srvcman/modules/vlans/model"
 	"github.com/rbaylon/srvcman/utils"
@@ -83,15 +81,6 @@ func VlanRouter(db vlanmodel.Crud) chi.Router {
 		vlan.ID = uint(id)
 		errupdate := db.Update(vlan)
 		if errupdate == nil {
-			dbconn := db.GetDB()
-			rtdb := runtimemodel.New(dbconn)
-			rt := &runtimemodel.Runtime{}
-			rt.Action = "updatepf"
-			rt.Status = "active"
-			err := rtdb.Add(rt)
-			if err != nil {
-				log.Println("update pf failed")
-			}
 			render.JSON(w, r, vlan)
 			return
 		}
@@ -105,15 +94,6 @@ func VlanRouter(db vlanmodel.Crud) chi.Router {
 		}
 		erradd := db.Add(vlan)
 		if erradd == nil {
-			dbconn := db.GetDB()
-			rtdb := runtimemodel.New(dbconn)
-			rt := &runtimemodel.Runtime{}
-			rt.Action = "updatepf"
-			rt.Status = "active"
-			err := rtdb.Add(rt)
-			if err != nil {
-				log.Println("update pf failed")
-			}
 			render.JSON(w, r, vlan)
 			return
 		}
@@ -132,15 +112,6 @@ func VlanRouter(db vlanmodel.Crud) chi.Router {
 		}
 		err = db.Delete(vlan)
 		if err == nil {
-			dbconn := db.GetDB()
-			rtdb := runtimemodel.New(dbconn)
-			rt := &runtimemodel.Runtime{}
-			rt.Action = "updatepf"
-			rt.Status = "active"
-			err := rtdb.Add(rt)
-			if err != nil {
-				log.Println("update pf failed")
-			}
 			render.JSON(w, r, vlan)
 			return
 		}
