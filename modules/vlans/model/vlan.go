@@ -10,12 +10,12 @@ import (
 
 type Vlan struct {
 	gorm.Model
-	Name       string `json:"name"`
-	PfifaceID  uint   `json:"pfiface_id"`
-	VlanTag    int    `json:"vlan_tag"`
-	PfconfigID uint   `json:"pfconfig_id"`
-	RxPrio     int    `json:"rx_prio"`
-	TxPrio     int    `json:"txprio"`
+	Name         string `json:"name"`
+	ParentDevice string `json:"parent_device"`
+	VlanTag      int    `json:"vlan_tag"`
+	PfconfigID   uint   `json:"pfconfig_id"`
+	RxPrio       int    `json:"rx_prio"`
+	TxPrio       int    `json:"txprio"`
 }
 
 // MigrateDB - Create the table if not exist in DB
