@@ -9,10 +9,10 @@ services:
     volumes:
       - ./.env:/build/.env:ro # Mount your static HTML directory
     environment:
-      - VIRTUAL_HOST=devapi.arkgate.net
+      - VIRTUAL_HOST=devapi.arkgate.space
       - VIRTUAL_PORT=44444
-      - LETSENCRYPT_HOST=devapi.arkgate.net
-      - WEB_FQDN=devapi.arkgate.net
+      - LETSENCRYPT_HOST=devapi.arkgate.space
+      - WEB_FQDN=devapi.arkgate.space
     networks:
       - nginx-reverse-proxy
 
