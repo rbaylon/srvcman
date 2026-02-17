@@ -11,6 +11,7 @@ import (
 	pflowmodel "github.com/rbaylon/srvcman/modules/pflows/model"
 	planmodel "github.com/rbaylon/srvcman/modules/plans/model"
 	submodel "github.com/rbaylon/srvcman/modules/subs/model"
+	vlanmodel "github.com/rbaylon/srvcman/modules/vlans/model"
 	vouchermodel "github.com/rbaylon/srvcman/modules/vouchers/model"
 	"gorm.io/gorm"
 )
@@ -32,6 +33,7 @@ type Pfconfig struct {
 	Workername        string                 `json:"workername"`
 	Plans             []planmodel.Plan       `json:"plans"`
 	Rules             []fwmodel.Fw           `json:"rules"`
+	Vlans             []vlanmodel.Vlan       `json:"vlans"`
 }
 
 // MigrateDB - Create the table if not exist in DB
@@ -99,7 +101,8 @@ func (s *Storage) GetAll() ([]Pfconfig, error) {
 
 func (s *Storage) GetById(id uint) (*Pfconfig, error) {
 	var pfconfig Pfconfig
-	result := s.DB.Preload("Ifaces").Preload("Dhcps").Preload("Pflows").Preload("Plans").First(&pfconfig, id)
+	result := s.DB.Preload("Ifaces").Preload("Dhcps").Preload(
+		"Pflows").Preload("Plans").Preload("Vlans").First(&pfconfig, id)
 	if result.Error != nil {
 		return nil, result.Error
 	}
@@ -111,7 +114,7 @@ func (s *Storage) GetByRouterId(value string) (*Pfconfig, error) {
 	result := s.DB.Where("Router = ?", value).Preload(
 		"Ifaces").Preload("Vouchers").Preload("Dhcps").Preload(
 		"Subs").Preload("Pflows").Preload("Plans").Preload(
-		"Rules").First(&pfconfig)
+		"Rules").Preload("Vlans").First(&pfconfig)
 	if result.Error != nil {
 		return nil, result.Error
 	}
