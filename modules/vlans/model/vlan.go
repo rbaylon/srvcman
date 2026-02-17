@@ -34,6 +34,7 @@ func (a *Vlan) Bind(r *http.Request) error {
 type Crud interface {
 	GetAll(opt string) ([]Vlan, error)
 	GetById(uid uint) (*Vlan, error)
+	GetByName(name string) (*Vlan, error)
 	Add(Vlan *Vlan) error
 	Update(Vlan *Vlan) error
 	Delete(Vlan *Vlan) error
@@ -54,42 +55,51 @@ func (s *Storage) GetDB() *gorm.DB {
 	return s.DB
 }
 
-func (s *Storage) Add(Vlan *Vlan) error {
-	result := s.DB.Create(Vlan)
+func (s *Storage) Add(vlan *Vlan) error {
+	result := s.DB.Create(vlan)
 	if result.Error != nil {
 		return result.Error
 	}
 	return nil
+}
+
+func (s *Storage) GetByName(name string) (*Vlan, error) {
+	var vlan Vlan
+	result := s.DB.Where("Name = ?", name).First(&vlan)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return &vlan, nil
 }
 
 func (s *Storage) GetAll(option string) ([]Vlan, error) {
-	var Vlans []Vlan
-	result := s.DB.Find(&Vlans)
+	var vlans []Vlan
+	result := s.DB.Find(&vlans)
 	if result.Error != nil {
 		return nil, result.Error
 	}
-	return Vlans, nil
+	return vlans, nil
 }
 
 func (s *Storage) GetById(id uint) (*Vlan, error) {
-	var Vlan Vlan
-	result := s.DB.First(&Vlan, id)
+	var vlan Vlan
+	result := s.DB.First(&vlan, id)
 	if result.Error != nil {
 		return nil, result.Error
 	}
-	return &Vlan, nil
+	return &vlan, nil
 }
 
-func (s *Storage) Update(Vlan *Vlan) error {
-	result := s.DB.Save(Vlan)
+func (s *Storage) Update(vlan *Vlan) error {
+	result := s.DB.Save(vlan)
 	if result.Error != nil {
 		return result.Error
 	}
 	return nil
 }
 
-func (s *Storage) Delete(Vlan *Vlan) error {
-	result := s.DB.Delete(Vlan)
+func (s *Storage) Delete(vlan *Vlan) error {
+	result := s.DB.Delete(vlan)
 	if result.Error != nil {
 		return result.Error
 	}

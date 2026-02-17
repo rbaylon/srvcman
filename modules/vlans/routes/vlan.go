@@ -67,6 +67,15 @@ func VlanRouter(db vlanmodel.Crud) chi.Router {
 		}
 		render.JSON(w, r, vlan)
 	})
+	r.Get("/name/{vlandevice}", func(w http.ResponseWriter, r *http.Request) {
+		vlandev := chi.URLParam(r, "vlandevice")
+		vlan, err := db.GetByName(vlandev)
+		if err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "DB error", http.StatusInternalServerError))
+			return
+		}
+		render.JSON(w, r, vlan)
+	})
 	r.Put("/{vlanId}", func(w http.ResponseWriter, r *http.Request) {
 		id, err := strconv.Atoi(chi.URLParam(r, "vlanId"))
 		if err != nil {
