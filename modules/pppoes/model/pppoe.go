@@ -43,7 +43,7 @@ type Crud interface {
 	Delete(pppoe *Pppoe) error
 	GetBypppoeValue(value string) (*Pppoe, error)
 	GetDB() *gorm.DB
-	GetByPfconfigId(id uint) (*Pppoe, error)
+	GetByPfconfigId(id uint) ([]Pppoe, error)
 }
 
 type Storage struct {
