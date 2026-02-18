@@ -2,6 +2,7 @@
 package pppoemodel
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 
@@ -16,6 +17,7 @@ type Pppoe struct {
 	Ip          string `json:"ip"`
 	PoolAddress string `json:"pool"`
 	DnsAddress  string `json:"dns"`
+	DevIndex    int    `json:"dev_index"`
 	PfconfigID  uint   `json:"pfconfig_id"`
 }
 
@@ -73,8 +75,17 @@ func (s *Storage) Add(pppoe *Pppoe) error {
 	if presult.Error != nil {
 		return presult.Error
 	}
+	var pppoes []Pppoe
+	res := s.DB.Find(&pppoes)
+	if res.Error != nil {
+		return res.Error
+	}
+	pppoe.DevIndex = len(pppoes)
+	if pppoe.DevIndex > 7 {
+		return fmt.Errorf("max pppac index limit reached.")
+	}
 	pfiface.Name = pppoe.Name
-	pfiface.Device = "pppac0"
+	pfiface.Device = fmt.Sprintf("pppac%d", pppoe.DevIndex)
 	pfiface.PfconfigID = pppoe.PfconfigID
 	pfiface.Ip = pppoe.Ip
 	pfiface.Type = "internal"
@@ -131,7 +142,7 @@ func (s *Storage) GetByPfconfigId(id uint) (*Pppoe, error) {
 
 func (s *Storage) Update(pppoe *Pppoe) error {
 	pfiface := pfifacemodel.Pfiface{}
-	presult := s.DB.Where("Device = ?", "pppac0").First(&pfiface)
+	presult := s.DB.Where("Device = ?", fmt.Sprintf("pppac%d", pppoe.DevIndex)).First(&pfiface)
 	if presult.Error != nil {
 		log.Println("PPP interface update error:", presult.Error)
 	} else {
@@ -151,7 +162,7 @@ func (s *Storage) Update(pppoe *Pppoe) error {
 
 func (s *Storage) Delete(pppoe *Pppoe) error {
 	pfiface := pfifacemodel.Pfiface{}
-	presult := s.DB.Where("Device = ?", "pppac0").First(&pfiface)
+	presult := s.DB.Where("Device = ?", fmt.Sprintf("pppac%d", pppoe.DevIndex)).First(&pfiface)
 	if presult.Error != nil {
 		log.Println("PPP interface delete error:", presult.Error)
 	} else {
