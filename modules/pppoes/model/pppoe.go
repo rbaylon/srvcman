@@ -131,13 +131,13 @@ func (s *Storage) GetBypppoeValue(value string) (*Pppoe, error) {
 	return &pppoe, nil
 }
 
-func (s *Storage) GetByPfconfigId(id uint) (*Pppoe, error) {
-	var pppoe Pppoe
-	result := s.DB.Where("pfconfig_id = ?", id).First(&pppoe)
+func (s *Storage) GetByPfconfigId(id uint) ([]Pppoe, error) {
+	var pppoes []Pppoe
+	result := s.DB.Where("pfconfig_id = ?", id).Find(&pppoes)
 	if result.Error != nil {
 		return nil, result.Error
 	}
-	return &pppoe, nil
+	return pppoes, nil
 }
 
 func (s *Storage) Update(pppoe *Pppoe) error {
