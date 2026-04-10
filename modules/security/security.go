@@ -155,7 +155,7 @@ func validateToken(tokenString string, r *http.Request, db *gorm.DB, module stri
 					if ug.Groupname == pg.Groupname {
 						switch p.Action {
 						case "RW":
-							deny = false
+							//deny = false
 							if p.Resource != "any" {
 								if path == p.Resource {
 									deny = false
@@ -165,7 +165,7 @@ func validateToken(tokenString string, r *http.Request, db *gorm.DB, module stri
 							}
 						case "RO":
 							if r.Method == "GET" {
-								deny = false
+								//deny = false
 								if p.Resource != "any" {
 									if path == p.Resource {
 										deny = false
