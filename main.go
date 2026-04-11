@@ -23,6 +23,8 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/go-chi/render"
 	"github.com/rbaylon/srvcman/database"
+	changemodel "github.com/rbaylon/srvcman/modules/changes/model"
+	changeroutes "github.com/rbaylon/srvcman/modules/changes/routes"
 	collectionmodel "github.com/rbaylon/srvcman/modules/collections/model"
 	collectionroutes "github.com/rbaylon/srvcman/modules/collections/routes"
 	dhcpmodel "github.com/rbaylon/srvcman/modules/dhcps/model"
@@ -94,6 +96,7 @@ func main() {
 	policymodel.MigrateDB(db)
 	pppoemodel.MigrateDB(db)
 	vlanmodel.MigrateDB(db)
+	changemodel.MigrateDB(db)
 
 	userStore := usermodel.New(db)
 	groupStore := groupmodel.New(db)
@@ -112,6 +115,7 @@ func main() {
 	planStore := planmodel.New(db)
 	pppoeStore := pppoemodel.New(db)
 	vlanStore := vlanmodel.New(db)
+	changeStore := changemodel.New(db)
 
 	r := chi.NewRouter()
 	r.Use(render.SetContentType(render.ContentTypeJSON))
@@ -148,6 +152,7 @@ func main() {
 	r.Mount("/api/v1/plans", planroutes.PlanRouter(planStore))
 	r.Mount("/api/v1/pppoe", pppoeroutes.PppoeRouter(pppoeStore))
 	r.Mount("/api/v1/vlans", vlanroutes.VlanRouter(vlanStore))
+	r.Mount("/api/v1/changes", changeroutes.ChangeRouter(changeStore))
 	go utils.CheckExpired(voucherStore)
 	http.ListenAndServe(fmt.Sprintf("%s:%s", app_ip, app_port), r)
 }

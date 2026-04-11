@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-chi/render"
 	"github.com/rbaylon/srvcman/database"
+	changemodel "github.com/rbaylon/srvcman/modules/Changes/model"
 	policymodel "github.com/rbaylon/srvcman/modules/policies/model"
 	usermodel "github.com/rbaylon/srvcman/modules/users/model"
 	"github.com/rbaylon/srvcman/utils"
@@ -185,5 +186,18 @@ func validateToken(tokenString string, r *http.Request, db *gorm.DB, module stri
 		return fmt.Errorf("Access denied.")
 	}
 	log.Printf("Access granted: %s %s %s from %s\n", username, method, path, remote)
+	if method != "GET" && method != "OPTIONS" {
+		data := fmt.Sprintf("%s %s %s %s", path, method, username, remote)
+		chdb := changemodel.New(db)
+		ch := changemodel.Change{}
+		ch.Module = module
+		ch.Data = data
+		ch.Applied = false
+		err = chdb.Add(&ch)
+		if err != nil {
+			log.Printf("Failed to create %s change: %s", module, data)
+		}
+	}
+
 	return nil
 }
