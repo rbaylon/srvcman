@@ -12,7 +12,7 @@ import (
 
 	"github.com/go-chi/render"
 	"github.com/rbaylon/srvcman/database"
-	changemodel "github.com/rbaylon/srvcman/modules/Changes/model"
+	changemodel "github.com/rbaylon/srvcman/modules/changes/model"
 	policymodel "github.com/rbaylon/srvcman/modules/policies/model"
 	usermodel "github.com/rbaylon/srvcman/modules/users/model"
 	"github.com/rbaylon/srvcman/utils"

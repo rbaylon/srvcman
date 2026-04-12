@@ -53,6 +53,14 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 		}
 		render.JSON(w, r, res)
 	})
+	r.Get("/pending", func(w http.ResponseWriter, r *http.Request) {
+		res, errdb := db.GetAllApplied()
+		if errdb != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(errdb, "DB error", http.StatusInternalServerError))
+			return
+		}
+		render.JSON(w, r, res)
+	})
 	r.Get("/{ChangeId}", func(w http.ResponseWriter, r *http.Request) {
 		id, err := strconv.Atoi(chi.URLParam(r, "ChangeId"))
 		if err != nil {

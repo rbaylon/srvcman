@@ -38,6 +38,7 @@ func (a *Changes) Bind(r *http.Request) error {
 
 type Crud interface {
 	GetAll() ([]Change, error)
+	GetAllApplied() ([]Change, error)
 	GetBySubId(id uint) ([]Change, error)
 	GetById(uid uint) (*Change, error)
 	Add(change *Change) error
@@ -80,6 +81,15 @@ func (s *Storage) Add(change *Change) error {
 func (s *Storage) GetAll() ([]Change, error) {
 	var changes []Change
 	result := s.DB.Find(&changes)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return changes, nil
+}
+
+func (s *Storage) GetAllApplied() ([]Change, error) {
+	var changes []Change
+	result := s.DB.Where("applied = ?", 0).Find(&changes)
 	if result.Error != nil {
 		return nil, result.Error
 	}
