@@ -186,7 +186,7 @@ func validateToken(tokenString string, r *http.Request, db *gorm.DB, module stri
 		return fmt.Errorf("Access denied.")
 	}
 	log.Printf("Access granted: %s %s %s from %s\n", username, method, path, remote)
-	if method != "GET" {
+	if method == "PUT" || method == "POST" || method == "DELETE" {
 		data := fmt.Sprintf("%s %s %s %s", path, method, username, remote)
 		chdb := changemodel.New(db)
 		ch := changemodel.Change{}
