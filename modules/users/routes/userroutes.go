@@ -119,6 +119,8 @@ func UserRouter(db usermodel.Crud) chi.Router {
 			group.Groupname = user.Username
 			err = grpdb.Add(&group)
 			if err == nil {
+				user.Groups = append(user.Groups, group)
+				db.Update(&user)
 				render.JSON(w, r, user)
 			}
 			return
