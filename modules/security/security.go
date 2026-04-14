@@ -196,6 +196,8 @@ func validateToken(tokenString string, r *http.Request, db *gorm.DB, module stri
 		err = chdb.Add(&ch)
 		if err != nil {
 			log.Printf("Failed to create %s change: %s", module, data)
+		} else {
+			log.Printf("%s change success: %s", module, data)
 		}
 	}
 
