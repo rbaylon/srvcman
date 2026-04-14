@@ -33,6 +33,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/jwtauth/v5"
 	"github.com/go-chi/render"
+	groupmodel "github.com/rbaylon/srvcman/modules/groups/model"
 	"github.com/rbaylon/srvcman/modules/security"
 	usermodel "github.com/rbaylon/srvcman/modules/users/model"
 	"github.com/rbaylon/srvcman/utils"
@@ -112,7 +113,14 @@ func UserRouter(db usermodel.Crud) chi.Router {
 		}
 		err := db.Add(&user)
 		if err == nil {
-			render.JSON(w, r, user)
+			dbconn := db.GetDB()
+			grpdb := groupmodel.New(dbconn)
+			group := groupmodel.Group{}
+			group.Groupname = user.Username
+			err = grpdb.Add(&group)
+			if err == nil {
+				render.JSON(w, r, user)
+			}
 			return
 		}
 		render.Render(w, r, utils.ErrInvalidRequest(err, "DB error", http.StatusInternalServerError))
