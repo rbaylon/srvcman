@@ -144,6 +144,10 @@ func validateToken(tokenString string, r *http.Request, db *gorm.DB, module stri
 		username = user.(string)
 		if username == "admin" {
 			log.Printf("Access granted: %s %s %s from %s\n", username, method, path, remote)
+			data := fmt.Sprintf("%s %s %s %s", path, method, username, remote)
+			if !strings.Contains(method, "GET") {
+				audittrail(data, module, db)
+			}
 			return nil
 		}
 		userdb := usermodel.New(db)
@@ -186,20 +190,24 @@ func validateToken(tokenString string, r *http.Request, db *gorm.DB, module stri
 		return fmt.Errorf("Access denied.")
 	}
 	log.Printf("Access granted: %s %s %s from %s\n", username, method, path, remote)
+	data := fmt.Sprintf("%s %s %s %s", path, method, username, remote)
 	if !strings.Contains(method, "GET") {
-		data := fmt.Sprintf("%s %s %s %s", path, method, username, remote)
-		chdb := changemodel.New(db)
-		ch := changemodel.Change{}
-		ch.Module = module
-		ch.Data = data
-		ch.Applied = false
-		err = chdb.Add(&ch)
-		if err != nil {
-			log.Printf("Failed to create %s change: %s", module, data)
-		} else {
-			log.Printf("%s change success: %s", module, data)
-		}
+		audittrail(data, module, db)
 	}
 
 	return nil
+}
+
+func audittrail(data string, module string, db *gorm.DB) {
+	chdb := changemodel.New(db)
+	ch := changemodel.Change{}
+	ch.Module = module
+	ch.Data = data
+	ch.Applied = false
+	err := chdb.Add(&ch)
+	if err != nil {
+		log.Printf("Failed to create %s change: %s", module, data)
+	} else {
+		log.Printf("%s change success: %s", module, data)
+	}
 }
