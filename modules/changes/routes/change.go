@@ -27,6 +27,7 @@ package changeroutes
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -53,8 +54,25 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 		}
 		render.JSON(w, r, res)
 	})
+	r.Put("/pending", func(w http.ResponseWriter, r *http.Request) {
+		res, errdb := db.GetApplied(1)
+		if errdb != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(errdb, "DB error", http.StatusInternalServerError))
+			return
+		}
+		errors := []Changemodel.Change{}
+		for _, data := range res {
+			data.Applied = true
+			err := db.Update(&data)
+			if err != nil {
+				log.Printf("Error updating change: %d", data.ID)
+			}
+			errors = append(errors, data) //check for errors during arkcmd exec
+		}
+		render.JSON(w, r, errors)
+	})
 	r.Get("/pending", func(w http.ResponseWriter, r *http.Request) {
-		res, errdb := db.GetAllApplied()
+		res, errdb := db.GetApplied(0)
 		if errdb != nil {
 			render.Render(w, r, utils.ErrInvalidRequest(errdb, "DB error", http.StatusInternalServerError))
 			return
