@@ -34,6 +34,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/jwtauth/v5"
 	"github.com/go-chi/render"
+	Acmd "github.com/rbaylon/arkgatecmd"
+	"github.com/rbaylon/srvcman/database"
 	Changemodel "github.com/rbaylon/srvcman/modules/changes/model"
 	"github.com/rbaylon/srvcman/modules/security"
 	"github.com/rbaylon/srvcman/utils"
@@ -61,14 +63,51 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 			return
 		}
 		errors := []Changemodel.Change{}
+		changes := make(map[string]int)
 		for _, data := range res {
 			data.Applied = true
+			changes[data.Module] += 1
 			err := db.Update(&data)
 			if err != nil {
 				log.Printf("Error updating change: %d", data.ID)
+				errors = append(errors, data)
 			}
-			errors = append(errors, data) //check for errors during arkcmd exec
 		}
+		usocket := database.GetEnvVariable("UNIX_SOCKET")
+		rundir := database.GetEnvVariable("RUN_DIR")
+		pfcmd := Acmd.GetPFcmds(rundir)
+		icmd := Acmd.PrepareCmd("interface", "/bin/sh", []string{"/etc/netstart"})
+
+		// use if statement instead of switch statement due to order of executioN
+		if changes["pfifaces"] > 0 {
+			err := icmd.SendCmd(utils.GetUnixConn(usocket))
+			if err != nil {
+				exeerror := Changemodel.Change{}
+				exeerror.Module = "pfifaces"
+				exeerror.Data = "error restarting network"
+				errors = append(errors, exeerror)
+			}
+		}
+		if changes["subs"] > 0 || changes["Fws"] > 0 {
+			err := pfcmd["check"].SendCmd(utils.GetUnixConn(usocket))
+			if err != nil {
+				exeerror := Changemodel.Change{}
+				exeerror.Module = "subs"
+				exeerror.Data = "error in " + rundir + "/pf.conf"
+				errors = append(errors, exeerror)
+			}
+			pfcmd["backup"].SendCmd(utils.GetUnixConn(usocket))
+			pfcmd["move"].SendCmd(utils.GetUnixConn(usocket))
+			err = pfcmd["apply"].SendCmd(utils.GetUnixConn(usocket))
+			if err != nil {
+				exeerror := Changemodel.Change{}
+				exeerror.Module = "subs"
+				exeerror.Data = "error applying " + rundir + "/pf.conf"
+				errors = append(errors, exeerror)
+				pfcmd["revert"].SendCmd(utils.GetUnixConn(usocket))
+			}
+		}
+		//utils.GetUnixConn(usocket)
 		render.JSON(w, r, errors)
 	})
 	r.Get("/pending", func(w http.ResponseWriter, r *http.Request) {
