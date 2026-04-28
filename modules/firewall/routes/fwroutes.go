@@ -45,7 +45,7 @@ var tokenAuth *jwtauth.JWTAuth
 func FwRouter(db fwmodel.Crud) chi.Router {
 	r := chi.NewRouter()
 	dbconn := db.GetDB()
-	r.Use(security.TokenRequired(dbconn, "Fws"))
+	r.Use(security.TokenRequired(dbconn, "firewall"))
 
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		opt := r.URL.Query().Get("option")

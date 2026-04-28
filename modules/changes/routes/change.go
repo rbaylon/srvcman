@@ -77,7 +77,7 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 		rundir := database.GetEnvVariable("RUN_DIR")
 		pfcmd := Acmd.GetPFcmds(rundir)
 		icmd := Acmd.PrepareCmd("interface", "/bin/sh", []string{"/etc/netstart"})
-
+		ifchange := false
 		// use if statement instead of switch statement due to order of executioN
 		if changes["pfifaces"] > 0 {
 			err := icmd.SendCmd(utils.GetUnixConn(usocket))
@@ -86,9 +86,11 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 				exeerror.Module = "pfifaces"
 				exeerror.Data = "error restarting network"
 				errors = append(errors, exeerror)
+			} else {
+				ifchange = true
 			}
 		}
-		if changes["subs"] > 0 || changes["Fws"] > 0 {
+		if changes["subs"] > 0 || changes["firewall"] > 0 || ifchange {
 			err := pfcmd["check"].SendCmd(utils.GetUnixConn(usocket))
 			if err != nil {
 				exeerror := Changemodel.Change{}
