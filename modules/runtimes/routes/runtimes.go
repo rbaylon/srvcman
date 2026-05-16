@@ -72,7 +72,7 @@ func RuntimeRouter(db runtimemodel.Crud) chi.Router {
 			render.Render(w, r, utils.ErrInvalidRequest(rerr, "invalid record id", http.StatusInternalServerError))
 			return
 		}
-		rt, err := db.GetById(uint(val))
+		rt, err := db.GetByWorkerId(val)
 		if err != nil {
 			render.Render(w, r, utils.ErrInvalidRequest(err, "DB get error", http.StatusInternalServerError))
 			return
