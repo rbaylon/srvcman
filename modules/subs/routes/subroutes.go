@@ -87,6 +87,7 @@ func SubRouter(db submodel.Crud) chi.Router {
 			rt := &runtimemodel.Runtime{}
 			rt.Action = "updatepf"
 			rt.Status = "active"
+			rt.Workerid = int(sub.PfconfigID)
 			err := rtdb.Add(rt)
 			if err != nil {
 				log.Println("update pf failed")
@@ -128,6 +129,7 @@ func SubRouter(db submodel.Crud) chi.Router {
 			rt := &runtimemodel.Runtime{}
 			rt.Action = "updatepf"
 			rt.Status = "active"
+			rt.Workerid = int(sub.PfconfigID)
 			err := rtdb.Add(rt)
 			if err != nil {
 				log.Println("update pf failed")
@@ -159,6 +161,7 @@ func SubRouter(db submodel.Crud) chi.Router {
 			rt := &runtimemodel.Runtime{}
 			rt.Action = "updatepf"
 			rt.Status = "active"
+			rt.Workerid = int(sub.PfconfigID)
 			err := rtdb.Add(rt)
 			if err != nil {
 				log.Println("update pf failed")
@@ -186,6 +189,7 @@ func SubRouter(db submodel.Crud) chi.Router {
 			rt := &runtimemodel.Runtime{}
 			rt.Action = "updatepf"
 			rt.Status = "active"
+			rt.Workerid = int(sub.PfconfigID)
 			err := rtdb.Add(rt)
 			if err != nil {
 				log.Println("update pf failed")

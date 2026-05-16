@@ -39,7 +39,7 @@ type Crud interface {
 	Add(runtime *Runtime) error
 	Update(runtime *Runtime) error
 	Delete(runtime *Runtime) error
-	GetByAction(value string) (*Runtime, error)
+	GetByAction(value string, wid int) (*Runtime, error)
 	GetDB() *gorm.DB
 }
 
@@ -92,9 +92,9 @@ func (s *Storage) GetByWorkerId(wid uint) (*Runtime, error) {
 	return &runtime, nil
 }
 
-func (s *Storage) GetByAction(value string) (*Runtime, error) {
+func (s *Storage) GetByAction(value string, wid int) (*Runtime, error) {
 	var runtime Runtime
-	result := s.DB.Where("Action = ?", value).First(&runtime)
+	result := s.DB.Where("Action = ? AND Workerid = ?", value, wid).First(&runtime)
 	if result.Error != nil {
 		return nil, result.Error
 	}

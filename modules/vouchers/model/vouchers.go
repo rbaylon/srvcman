@@ -108,6 +108,7 @@ func (s *Storage) DisableExpired() error {
 		return result.Error
 	}
 	update := false
+	workerid := 0
 	for _, v := range vouchers {
 		overtime := time.Since(v.DateExpires).Minutes()
 		if overtime > 0 {
@@ -115,6 +116,7 @@ func (s *Storage) DisableExpired() error {
 			s.DB.Save(&v)
 			log.Println("Code expired:", v.Value)
 			update = true
+			workerid = int(v.PfconfigID)
 		}
 	}
 	if update {
@@ -122,6 +124,7 @@ func (s *Storage) DisableExpired() error {
 		rt := &runtimemodel.Runtime{}
 		rt.Action = "updatepf"
 		rt.Status = "active"
+		rt.Workerid = workerid
 		err := rtdb.Add(rt)
 		if err != nil {
 			log.Println("update pf failed")
