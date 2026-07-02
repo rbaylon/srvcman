@@ -5,6 +5,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"regexp"
 	"time"
 
 	"github.com/go-chi/render"
@@ -51,4 +52,10 @@ func GetUnixConn(socketpath string) net.Conn {
 		log.Println("Dial error ", err)
 	}
 	return c
+}
+
+var alnumRegex = regexp.MustCompile(`^[A-Za-z0-9]+$`)
+
+func IsAlnumStrict(s string) bool {
+	return alnumRegex.MatchString(s)
 }
