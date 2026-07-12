@@ -32,7 +32,6 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/jwtauth/v5"
 	"github.com/go-chi/render"
 	Acmd "github.com/rbaylon/arkgatecmd"
 	"github.com/rbaylon/srvcman/database"
@@ -41,7 +40,7 @@ import (
 	"github.com/rbaylon/srvcman/utils"
 )
 
-var tokenAuth *jwtauth.JWTAuth
+//var tokenAuth *jwtauth.JWTAuth
 
 func ChangeRouter(db Changemodel.Crud) chi.Router {
 	r := chi.NewRouter()
@@ -80,21 +79,20 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 		ifchange := false
 		// use if statement instead of switch statement due to order of executioN
 		if changes["pfifaces"] > 0 {
-			err := pfcmd["check"].SendCmd(utils.GetUnixConn(usocket))
+			err := icmd.SendCmd(utils.GetUnixConn(usocket))
 			if err != nil {
 				exeerror := Changemodel.Change{}
-				exeerror.Module = "subs"
-				exeerror.Data = "error in " + rundir + "/pf.conf"
+				exeerror.Module = "pfifaces"
+				exeerror.Data = "error restarting network"
 				errors = append(errors, exeerror)
 			} else {
-				err := icmd.SendCmd(utils.GetUnixConn(usocket))
+				ifchange = true
+				err := pfcmd["apply"].SendCmd(utils.GetUnixConn(usocket))
 				if err != nil {
 					exeerror := Changemodel.Change{}
-					exeerror.Module = "pfifaces"
-					exeerror.Data = "error restarting network"
+					exeerror.Module = "subs"
+					exeerror.Data = "error in /etc/pf.conf"
 					errors = append(errors, exeerror)
-				} else {
-					ifchange = true
 				}
 			}
 		}

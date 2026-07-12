@@ -31,14 +31,13 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/jwtauth/v5"
 	"github.com/go-chi/render"
 	"github.com/rbaylon/srvcman/modules/security"
 	vlanmodel "github.com/rbaylon/srvcman/modules/vlans/model"
 	"github.com/rbaylon/srvcman/utils"
 )
 
-var tokenAuth *jwtauth.JWTAuth
+//var tokenAuth *jwtauth.JWTAuth
 
 func VlanRouter(db vlanmodel.Crud) chi.Router {
 	r := chi.NewRouter()
@@ -46,8 +45,7 @@ func VlanRouter(db vlanmodel.Crud) chi.Router {
 	r.Use(security.TokenRequired(dbconn, "vlans"))
 
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		opt := r.URL.Query().Get("option")
-		res, errdb := db.GetAll(opt)
+		res, errdb := db.GetAll()
 		if errdb != nil {
 			render.Render(w, r, utils.ErrInvalidRequest(errdb, "DB error", http.StatusInternalServerError))
 			return

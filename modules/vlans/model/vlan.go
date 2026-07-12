@@ -32,7 +32,7 @@ func (a *Vlan) Bind(r *http.Request) error {
 }
 
 type Crud interface {
-	GetAll(opt string) ([]Vlan, error)
+	GetAll() ([]Vlan, error)
 	GetById(uid uint) (*Vlan, error)
 	GetByName(name string) (*Vlan, error)
 	Add(Vlan *Vlan) error
@@ -72,7 +72,7 @@ func (s *Storage) GetByName(name string) (*Vlan, error) {
 	return &vlan, nil
 }
 
-func (s *Storage) GetAll(option string) ([]Vlan, error) {
+func (s *Storage) GetAll() ([]Vlan, error) {
 	var vlans []Vlan
 	result := s.DB.Find(&vlans)
 	if result.Error != nil {

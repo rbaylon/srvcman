@@ -2,9 +2,15 @@
 package pfifacemodel
 
 import (
+	"fmt"
 	"log"
+	"net"
 	"net/http"
+	"os"
+	"strings"
 
+	vlanmodel "github.com/rbaylon/srvcman/modules/vlans/model"
+	"github.com/rbaylon/srvcman/utils"
 	"gorm.io/gorm"
 )
 
@@ -52,6 +58,7 @@ type Crud interface {
 	Delete(pfiface *Pfiface) error
 	GetByPfifaceValue(value string) (*Pfiface, error)
 	GetDB() *gorm.DB
+	GenConF(pfiface *Pfiface) error
 }
 
 type Storage struct {
@@ -62,6 +69,52 @@ func New(db *gorm.DB) *Storage {
 	return &Storage{
 		DB: db,
 	}
+}
+
+type vlanmap struct {
+	Vmap map[string]vlanmodel.Vlan
+}
+
+func getVlans(vlans []vlanmodel.Vlan) vlanmap {
+	vm := vlanmap{}
+	vm.Vmap = make(map[string]vlanmodel.Vlan)
+	for _, v := range vlans {
+		vm.Vmap[v.Name] = v
+	}
+	return vm
+}
+
+func (s *Storage) GenConF(d *Pfiface) error {
+	vif := ""
+	vlandb := vlanmodel.New(s.GetDB())
+	vlanall, err := vlandb.GetAll()
+	if err != nil {
+		log.Println("Get vlans from db failed")
+	}
+	vlans := getVlans(vlanall)
+	if strings.Contains(d.Device, "vlan") {
+		cidr := utils.MaskToCidr(d.Netmask)
+		_, ipNet, err := net.ParseCIDR(fmt.Sprintf("%s/%d", d.Ip, cidr))
+		if err != nil {
+			fmt.Println("Error parsing CIDR:", err)
+			return err
+		}
+		broadcast := utils.BroadcastAddr(ipNet)
+		vlan := vlans.Vmap[d.Device]
+		prio := ""
+		if vlan.RxPrio > 0 || vlan.TxPrio > 0 {
+			prio = fmt.Sprintf("rxprio %d txprio %d", vlan.RxPrio, vlan.TxPrio)
+		}
+		vif = fmt.Sprintf(" %s parent %s %s vnetid %d",
+			broadcast, vlan.ParentDevice, prio, vlan.VlanTag)
+	}
+	iface := fmt.Sprintf("inet %s %s%s\n", d.Ip, d.Netmask, vif)
+	err = os.WriteFile("/etc/hostname."+d.Device, []byte(iface+"\n"), 0640)
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+	return nil
 }
 
 func (s *Storage) AddBulk(pfifaces []Pfiface) error {
