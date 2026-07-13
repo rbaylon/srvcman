@@ -31,14 +31,13 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/jwtauth/v5"
 	"github.com/go-chi/render"
 	pfifacemodel "github.com/rbaylon/srvcman/modules/pfifaces/model"
 	"github.com/rbaylon/srvcman/modules/security"
 	"github.com/rbaylon/srvcman/utils"
 )
 
-var tokenAuth *jwtauth.JWTAuth
+//var tokenAuth *jwtauth.JWTAuth
 
 func PfifaceRouter(db pfifacemodel.Crud) chi.Router {
 	r := chi.NewRouter()
