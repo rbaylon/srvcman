@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 
 	vlanmodel "github.com/rbaylon/srvcman/modules/vlans/model"
@@ -57,7 +58,7 @@ type Crud interface {
 	Delete(pfiface *Pfiface) error
 	GetByPfifaceValue(value string) (*Pfiface, error)
 	GetDB() *gorm.DB
-	GenConF(pfiface *Pfiface) (string, error)
+	GenConF(pfiface *Pfiface) error
 }
 
 type Storage struct {
@@ -83,7 +84,7 @@ func getVlans(vlans []vlanmodel.Vlan) vlanmap {
 	return vm
 }
 
-func (s *Storage) GenConF(d *Pfiface) (string, error) {
+func (s *Storage) GenConF(d *Pfiface) error {
 	vif := ""
 	vlandb := vlanmodel.New(s.GetDB())
 	vlanall, err := vlandb.GetAll()
@@ -96,7 +97,7 @@ func (s *Storage) GenConF(d *Pfiface) (string, error) {
 		_, ipNet, err := net.ParseCIDR(fmt.Sprintf("%s/%d", d.Ip, cidr))
 		if err != nil {
 			log.Println("Error parsing CIDR:", err)
-			return "", err
+			return err
 		}
 		broadcast := utils.BroadcastAddr(ipNet)
 		vlan := vlans.Vmap[d.Device]
@@ -108,7 +109,11 @@ func (s *Storage) GenConF(d *Pfiface) (string, error) {
 			broadcast, vlan.ParentDevice, prio, vlan.VlanTag)
 	}
 	iface := fmt.Sprintf("inet %s %s%s\n", d.Ip, d.Netmask, vif)
-	return iface, nil
+	err = os.WriteFile("/tmp/hostname."+d.Device, []byte(iface), 0640)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (s *Storage) AddBulk(pfifaces []Pfiface) error {

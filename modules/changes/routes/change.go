@@ -77,7 +77,7 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 		pfcmd := Acmd.GetPFcmds(rundir)
 		icmd := Acmd.PrepareCmd("interface", "/bin/sh", []string{"/etc/netstart"})
 		ifchange := false
-		// use if statement instead of switch statement due to order of executioN
+		// generate interface files before invoking netstart
 		if changes["pfifaces"] > 0 {
 			err := icmd.SendCmd(utils.GetUnixConn(usocket))
 			if err != nil {
