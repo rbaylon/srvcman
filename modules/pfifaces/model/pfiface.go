@@ -56,7 +56,7 @@ type Crud interface {
 	AddBulk(pfifaces []Pfiface) error
 	Update(pfiface *Pfiface) error
 	Delete(pfiface *Pfiface) error
-	GetByPfifaceValue(value string) (*Pfiface, error)
+	GetByDevice(d string) (*Pfiface, error)
 	GetDB() *gorm.DB
 	GenConF(pfiface *Pfiface) error
 }
@@ -113,6 +113,12 @@ func (s *Storage) GenConF(d *Pfiface) error {
 	if err != nil {
 		return err
 	}
+	if d.Default {
+		err = os.WriteFile("/tmp/mygate", []byte(d.Gateway), 0640)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -154,9 +160,9 @@ func (s *Storage) GetById(id uint) (*Pfiface, error) {
 	return &pfiface, nil
 }
 
-func (s *Storage) GetByPfifaceValue(value string) (*Pfiface, error) {
+func (s *Storage) GetByDevice(value string) (*Pfiface, error) {
 	var pfiface Pfiface
-	result := s.DB.Where("Value = ?", value).First(&pfiface)
+	result := s.DB.Where("Device = ?", value).First(&pfiface)
 	if result.Error != nil {
 		return nil, result.Error
 	}

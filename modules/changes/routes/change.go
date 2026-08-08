@@ -29,7 +29,10 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
@@ -75,24 +78,55 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 		usocket := database.GetEnvVariable("UNIX_SOCKET")
 		rundir := database.GetEnvVariable("RUN_DIR")
 		pfcmd := Acmd.GetPFcmds(rundir)
-		icmd := Acmd.PrepareCmd("interface", "/bin/sh", []string{"/etc/netstart"})
 		ifchange := false
-		// generate interface files before invoking netstart
 		if changes["pfifaces"] > 0 {
-			err := icmd.SendCmd(utils.GetUnixConn(usocket))
+			files, err := os.ReadDir("/tmp")
 			if err != nil {
-				exeerror := Changemodel.Change{}
-				exeerror.Module = "pfifaces"
-				exeerror.Data = "error restarting network"
-				errors = append(errors, exeerror)
-			} else {
+				log.Fatal(err)
+			}
+			foundif := false
+			ifs := []string{}
+			for _, file := range files {
+				if strings.Contains(file.Name(), "hostname.") {
+					foundif = true
+					iface := strings.Split(file.Name(), ".")
+					ifs = append(ifs, iface[1])
+				}
+			}
+			if foundif {
 				ifchange = true
-				err := pfcmd["apply"].SendCmd(utils.GetUnixConn(usocket))
-				if err != nil {
-					exeerror := Changemodel.Change{}
-					exeerror.Module = "subs"
-					exeerror.Data = "error in /etc/pf.conf"
-					errors = append(errors, exeerror)
+				cmds := []Acmd.Arkcmd{}
+				nowunix := time.Time.Unix(time.Time{})
+				for _, v := range ifs {
+					mvcmd := Acmd.PrepareCmd("Backup Interface: "+v, "mv", []string{"/etc/hostname." + v, "/etc/hostname." +
+						v + "." + strconv.FormatInt(nowunix, 10)})
+					cmds = append(cmds, *mvcmd)
+					etcif := Acmd.PrepareCmd("Move iface to etc: "+v, "mv", []string{"/tmp/hostname." + v, "/etc/"})
+					cmds = append(cmds, *etcif)
+					ifcmd := Acmd.PrepareCmd("Interface restart: "+v, "sh", []string{"/etc/netstart", v})
+					cmds = append(cmds, *ifcmd)
+					for _, c := range cmds {
+						err = c.SendCmd(utils.GetUnixConn(usocket))
+						if err != nil {
+							log.Println("Failed" + c.Name)
+						}
+						log.Println(c.Name)
+					}
+				}
+				_, err := os.Stat("/tmp/mygate")
+				if err == nil {
+					gwbackup := Acmd.PrepareCmd("Backup mygate", "mv", []string{"/etc/mygate",
+						"/etc/mygate." + strconv.FormatInt(nowunix, 10)})
+					err = gwbackup.SendCmd(utils.GetUnixConn(usocket))
+					if err != nil {
+						log.Println("mygate backup failed")
+					}
+					gwcmd := Acmd.PrepareCmd("Gateway restart", "sh", []string{"/etc/netstart"})
+					err = gwcmd.SendCmd(utils.GetUnixConn(usocket))
+					if err != nil {
+						log.Println("Netstart failed!")
+					}
+					log.Println("Networking restarted")
 				}
 			}
 		}
