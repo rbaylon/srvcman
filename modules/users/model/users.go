@@ -94,7 +94,7 @@ func (s *Storage) Add(user *User) error {
 
 func (s *Storage) GetAll() ([]User, error) {
 	var users []User
-	result := s.DB.Find(&users)
+	result := s.DB.Preload("Groups").Find(&users)
 	if result.Error != nil {
 		return nil, result.Error
 	}
