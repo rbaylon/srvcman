@@ -66,6 +66,17 @@ func GroupRouter(db groupmodel.Crud) chi.Router {
 		}
 		render.JSON(w, r, group)
 	})
+
+	r.Get("/getbyname/{name}", func(w http.ResponseWriter, r *http.Request) {
+		gname := chi.URLParam(r, "name")
+		group, err := db.GetByGroupname(gname)
+		if err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "DB error", http.StatusInternalServerError))
+			return
+		}
+		render.JSON(w, r, group)
+	})
+
 	r.Put("/{groupId}", func(w http.ResponseWriter, r *http.Request) {
 		id, err := strconv.Atoi(chi.URLParam(r, "groupId"))
 		if err != nil {
