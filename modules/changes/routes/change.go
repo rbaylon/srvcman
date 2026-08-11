@@ -59,7 +59,7 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 		render.JSON(w, r, res)
 	})
 	r.Put("/pending", func(w http.ResponseWriter, r *http.Request) {
-		res, errdb := db.GetApplied(0)
+		res, errdb := db.GetApplied("pending")
 		if errdb != nil {
 			render.Render(w, r, utils.ErrInvalidRequest(errdb, "DB error", http.StatusInternalServerError))
 			return
@@ -67,7 +67,7 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 		errors := []Changemodel.Change{}
 		changes := make(map[string]int)
 		for _, data := range res {
-			data.Applied = true
+			data.Applied = "yes"
 			changes[data.Module] += 1
 			err := db.Update(&data)
 			if err != nil {

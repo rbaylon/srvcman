@@ -203,7 +203,7 @@ func audittrail(data string, module string, db *gorm.DB) {
 	ch := changemodel.Change{}
 	ch.Module = module
 	ch.Data = data
-	ch.Applied = false
+	ch.Applied = "pending"
 	err := chdb.Add(&ch)
 	if err != nil {
 		log.Printf("Failed to create %s change: %s", module, data)

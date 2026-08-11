@@ -12,7 +12,7 @@ type Change struct {
 	gorm.Model
 	Module  string `json:"module"`
 	Data    string `json:"data"`
-	Applied bool   `json:"applied"`
+	Applied string `json:"applied"`
 }
 
 type Changes struct {
@@ -38,7 +38,7 @@ func (a *Changes) Bind(r *http.Request) error {
 
 type Crud interface {
 	GetAll() ([]Change, error)
-	GetApplied(val int) ([]Change, error)
+	GetApplied(val string) ([]Change, error)
 	GetBySubId(id uint) ([]Change, error)
 	GetById(uid uint) (*Change, error)
 	Add(change *Change) error
@@ -87,7 +87,7 @@ func (s *Storage) GetAll() ([]Change, error) {
 	return changes, nil
 }
 
-func (s *Storage) GetApplied(val int) ([]Change, error) {
+func (s *Storage) GetApplied(val string) ([]Change, error) {
 	var changes []Change
 	result := s.DB.Where("applied = ?", val).Find(&changes)
 	if result.Error != nil {
