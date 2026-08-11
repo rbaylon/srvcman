@@ -2,7 +2,6 @@ package security
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -38,7 +37,7 @@ func CheckPasswordHash(password, hash string) bool {
 
 func Login(db usermodel.Crud) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Println(r.RequestURI, r.Method, r.Header.Get("X-Real-IP"))
+		fmt.Println(r.RequestURI, r.Method, r.Header.Get("X-Real-IP"))
 		username, password, ok := r.BasicAuth()
 		if ok {
 			user, err := db.GetByUsername(username)
@@ -87,13 +86,13 @@ func sendtoken(w http.ResponseWriter, r *http.Request, username string) {
 func TokenRequired(db *gorm.DB, module string) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			log.Println(r.Method, r.RequestURI)
+			fmt.Println(r.Method, r.RequestURI)
 			reqtoken := r.Header.Get("Authorization")
 			if !strings.Contains(reqtoken, "Bearer ") {
 				render.Render(w, r, utils.ErrInvalidRequest(fmt.Errorf("JWT error"), "Authorization Bearer not found.", http.StatusUnauthorized))
 				return
 			}
-			//log.Println(reqtoken)
+			//fmt.Println(reqtoken)
 			token := reqtoken[len("Bearer "):]
 			err := validateToken(token, r, db, module)
 			if err != nil {
@@ -143,7 +142,7 @@ func validateToken(tokenString string, r *http.Request, db *gorm.DB, module stri
 		user := claims["username"]
 		username = user.(string)
 		if username == "admin" {
-			log.Printf("Access granted: %s %s %s from %s\n", username, method, path, remote)
+			fmt.Printf("Access granted: %s %s %s from %s\n", username, method, path, remote)
 			data := fmt.Sprintf("%s %s %s %s", path, method, username, remote)
 			if !strings.Contains(method, "GET") {
 				audittrail(data, module, db)
@@ -186,10 +185,10 @@ func validateToken(tokenString string, r *http.Request, db *gorm.DB, module stri
 		}
 	}
 	if deny {
-		log.Printf("Access denied: %s %s %s from %s\n", username, method, path, remote)
+		fmt.Printf("Access denied: %s %s %s from %s\n", username, method, path, remote)
 		return fmt.Errorf("Access denied.")
 	}
-	log.Printf("Access granted: %s %s %s from %s\n", username, method, path, remote)
+	fmt.Printf("Access granted: %s %s %s from %s\n", username, method, path, remote)
 	data := fmt.Sprintf("%s %s %s %s", path, method, username, remote)
 	if !strings.Contains(method, "GET") {
 		audittrail(data, module, db)
@@ -206,8 +205,8 @@ func audittrail(data string, module string, db *gorm.DB) {
 	ch.Applied = "pending"
 	err := chdb.Add(&ch)
 	if err != nil {
-		log.Printf("Failed to create %s change: %s", module, data)
+		fmt.Printf("Failed to create %s change: %s", module, data)
 	} else {
-		log.Printf("%s change success: %s", module, data)
+		fmt.Printf("%s change success: %s", module, data)
 	}
 }
