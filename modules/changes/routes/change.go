@@ -93,10 +93,10 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 					ifs = append(ifs, iface[1])
 				}
 			}
+			nowunix := time.Time.Unix(time.Time{})
 			if foundif {
 				ifchange = true
 				cmds := []Acmd.Arkcmd{}
-				nowunix := time.Time.Unix(time.Time{})
 				for _, v := range ifs {
 					mvcmd := Acmd.PrepareCmd("Backup Interface: "+v, "mv", []string{"/etc/hostname." + v, "/etc/hostname." +
 						v + "." + strconv.FormatInt(nowunix, 10)})
@@ -110,8 +110,11 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 						if err != nil {
 							log.Println("Failed" + c.Name)
 						}
-						log.Println(c.Name)
+						log.Println("Success: ", c.Name)
+						time.Sleep(2 * time.Second)
 					}
+					clear(cmds)
+					cmds = cmds[:0]
 				}
 				_, err := os.Stat("/tmp/mygate")
 				if err == nil {
@@ -121,12 +124,21 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 					if err != nil {
 						log.Println("mygate backup failed")
 					}
-					gwcmd := Acmd.PrepareCmd("Gateway restart", "sh", []string{"/etc/netstart"})
-					err = gwcmd.SendCmd(utils.GetUnixConn(usocket))
+					time.Sleep(1 * time.Second)
+					tmptoetc := Acmd.PrepareCmd("/tmp/mygate to etc", "mv", []string{"/tmp/mygate", "/etc/"})
+					err = tmptoetc.SendCmd(utils.GetUnixConn(usocket))
 					if err != nil {
-						log.Println("Netstart failed!")
+						log.Println("mygate tmp to etc failed")
+					} else {
+						time.Sleep(1 * time.Second)
+						gwcmd := Acmd.PrepareCmd("Gateway restart", "sh", []string{"/etc/netstart"})
+						err = gwcmd.SendCmd(utils.GetUnixConn(usocket))
+						if err != nil {
+							log.Println("Netstart failed!")
+						}
+						log.Println("Networking restarted")
+						time.Sleep(3 * time.Second)
 					}
-					log.Println("Networking restarted")
 				}
 			}
 		}
