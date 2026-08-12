@@ -82,16 +82,6 @@ func SubRouter(db submodel.Crud) chi.Router {
 		sub.ID = uint(id)
 		errupdate := db.Update(sub)
 		if errupdate == nil {
-			dbconn := db.GetDB()
-			rtdb := runtimemodel.New(dbconn)
-			rt := &runtimemodel.Runtime{}
-			rt.Action = "updatepf"
-			rt.Status = "active"
-			rt.Workerid = int(sub.PfconfigID)
-			err := rtdb.Add(rt)
-			if err != nil {
-				log.Println("update pf failed")
-			}
 			render.JSON(w, r, sub)
 			return
 		}
@@ -156,16 +146,6 @@ func SubRouter(db submodel.Crud) chi.Router {
 		}
 		erradd := db.Add(sub)
 		if erradd == nil {
-			dbconn := db.GetDB()
-			rtdb := runtimemodel.New(dbconn)
-			rt := &runtimemodel.Runtime{}
-			rt.Action = "updatepf"
-			rt.Status = "active"
-			rt.Workerid = int(sub.PfconfigID)
-			err := rtdb.Add(rt)
-			if err != nil {
-				log.Println("update pf failed")
-			}
 			render.JSON(w, r, sub)
 			return
 		}
@@ -184,16 +164,6 @@ func SubRouter(db submodel.Crud) chi.Router {
 		}
 		err = db.Delete(sub)
 		if err == nil {
-			dbconn := db.GetDB()
-			rtdb := runtimemodel.New(dbconn)
-			rt := &runtimemodel.Runtime{}
-			rt.Action = "updatepf"
-			rt.Status = "active"
-			rt.Workerid = int(sub.PfconfigID)
-			err := rtdb.Add(rt)
-			if err != nil {
-				log.Println("update pf failed")
-			}
 			render.JSON(w, r, sub)
 			return
 		}

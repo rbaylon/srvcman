@@ -27,7 +27,6 @@ package fwroutes
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 
@@ -35,7 +34,6 @@ import (
 	"github.com/go-chi/jwtauth/v5"
 	"github.com/go-chi/render"
 	fwmodel "github.com/rbaylon/srvcman/modules/firewall/model"
-	runtimemodel "github.com/rbaylon/srvcman/modules/runtimes/model"
 	"github.com/rbaylon/srvcman/modules/security"
 	"github.com/rbaylon/srvcman/utils"
 )
@@ -83,16 +81,6 @@ func FwRouter(db fwmodel.Crud) chi.Router {
 		Fw.ID = uint(id)
 		errupdate := db.Update(Fw)
 		if errupdate == nil {
-			dbconn := db.GetDB()
-			rtdb := runtimemodel.New(dbconn)
-			rt := &runtimemodel.Runtime{}
-			rt.Action = "updatepf"
-			rt.Status = "active"
-			rt.Workerid = int(Fw.PfconfigID)
-			err := rtdb.Add(rt)
-			if err != nil {
-				log.Println("update pf failed")
-			}
 			render.JSON(w, r, Fw)
 			return
 		}
@@ -106,16 +94,6 @@ func FwRouter(db fwmodel.Crud) chi.Router {
 		}
 		erradd := db.Add(Fw)
 		if erradd == nil {
-			dbconn := db.GetDB()
-			rtdb := runtimemodel.New(dbconn)
-			rt := &runtimemodel.Runtime{}
-			rt.Action = "updatepf"
-			rt.Status = "active"
-			rt.Workerid = int(Fw.PfconfigID)
-			err := rtdb.Add(rt)
-			if err != nil {
-				log.Println("update pf failed")
-			}
 			render.JSON(w, r, Fw)
 			return
 		}
@@ -134,16 +112,6 @@ func FwRouter(db fwmodel.Crud) chi.Router {
 		}
 		err = db.Delete(Fw)
 		if err == nil {
-			dbconn := db.GetDB()
-			rtdb := runtimemodel.New(dbconn)
-			rt := &runtimemodel.Runtime{}
-			rt.Action = "updatepf"
-			rt.Status = "active"
-			rt.Workerid = int(Fw.PfconfigID)
-			err := rtdb.Add(rt)
-			if err != nil {
-				log.Println("update pf failed")
-			}
 			render.JSON(w, r, Fw)
 			return
 		}

@@ -12,9 +12,9 @@ import (
 type Policy struct {
 	gorm.Model
 	Name     string             `json:"name" gorm:"unique;not null"`
-	Type     string             `json:"type"`
-	Resource string             `json:"resource"`
-	Action   string             `json:"action"`
+	Type     string             `json:"type"`     //module name
+	Resource string             `json:"resource"` //url|'any'
+	Action   string             `json:"action"`   // RW|RO
 	Groups   []groupmodel.Group `json:"groups" gorm:"many2many:policy_groups;"`
 }
 

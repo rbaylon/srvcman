@@ -108,7 +108,7 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 					for _, c := range cmds {
 						err = c.SendCmd(utils.GetUnixConn(usocket))
 						if err != nil {
-							log.Println("Failed" + c.Name)
+							log.Println("Failed:" + c.Name)
 						}
 						log.Println("Success: ", c.Name)
 						time.Sleep(2 * time.Second)
