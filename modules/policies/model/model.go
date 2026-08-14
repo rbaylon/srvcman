@@ -67,7 +67,7 @@ func (s *Storage) Add(policy *Policy) error {
 
 func (s *Storage) GetAll() ([]Policy, error) {
 	var policies []Policy
-	result := s.DB.Find(&policies)
+	result := s.DB.Preload("Groups").Find(&policies)
 	if result.Error != nil {
 		return nil, result.Error
 	}
