@@ -11,7 +11,6 @@
 //	    Headers: Authorization Basic
 //	    Return: JSON object with JWT
 //	    Return-Status: 200
-
 package main
 
 import (
@@ -23,45 +22,15 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/go-chi/render"
 	"github.com/rbaylon/srvcman/database"
-	changemodel "github.com/rbaylon/srvcman/modules/changes/model"
-	changeroutes "github.com/rbaylon/srvcman/modules/changes/routes"
-	collectionmodel "github.com/rbaylon/srvcman/modules/collections/model"
-	collectionroutes "github.com/rbaylon/srvcman/modules/collections/routes"
-	dhcpmodel "github.com/rbaylon/srvcman/modules/dhcps/model"
-	dhcproutes "github.com/rbaylon/srvcman/modules/dhcps/routes"
-	fwmodel "github.com/rbaylon/srvcman/modules/firewall/model"
-	fwroutes "github.com/rbaylon/srvcman/modules/firewall/routes"
-	groupmodel "github.com/rbaylon/srvcman/modules/groups/model"
-	grouproutes "github.com/rbaylon/srvcman/modules/groups/routes"
-	paymentmodel "github.com/rbaylon/srvcman/modules/payments/model"
-	paymentroutes "github.com/rbaylon/srvcman/modules/payments/routes"
-	pfconfigmodel "github.com/rbaylon/srvcman/modules/pfconfig/model"
-	pfconfigroutes "github.com/rbaylon/srvcman/modules/pfconfig/routes"
-	pfifacemodel "github.com/rbaylon/srvcman/modules/pfifaces/model"
-	pfifaceroutes "github.com/rbaylon/srvcman/modules/pfifaces/routes"
-	pflowmodel "github.com/rbaylon/srvcman/modules/pflows/model"
-	pflowroutes "github.com/rbaylon/srvcman/modules/pflows/routes"
-	planmodel "github.com/rbaylon/srvcman/modules/plans/model"
-	planroutes "github.com/rbaylon/srvcman/modules/plans/routes"
-	policymodel "github.com/rbaylon/srvcman/modules/policies/model"
-	policyroutes "github.com/rbaylon/srvcman/modules/policies/routes"
-	pppoemodel "github.com/rbaylon/srvcman/modules/pppoes/model"
-	pppoeroutes "github.com/rbaylon/srvcman/modules/pppoes/routes"
-	runtimemodel "github.com/rbaylon/srvcman/modules/runtimes/model"
-	runtimeroutes "github.com/rbaylon/srvcman/modules/runtimes/routes"
 	"github.com/rbaylon/srvcman/modules/security"
-	submodel "github.com/rbaylon/srvcman/modules/subs/model"
-	subroutes "github.com/rbaylon/srvcman/modules/subs/routes"
-	tunnelmodel "github.com/rbaylon/srvcman/modules/tunnels/model"
-	tunnelroutes "github.com/rbaylon/srvcman/modules/tunnels/routes"
 	usermodel "github.com/rbaylon/srvcman/modules/users/model"
-	userroutes "github.com/rbaylon/srvcman/modules/users/routes"
-	vlanmodel "github.com/rbaylon/srvcman/modules/vlans/model"
-	vlanroutes "github.com/rbaylon/srvcman/modules/vlans/routes"
 	vouchermodel "github.com/rbaylon/srvcman/modules/vouchers/model"
-	voucherroutes "github.com/rbaylon/srvcman/modules/vouchers/routes"
 	"github.com/rbaylon/srvcman/utils"
 )
+
+// moduleConfigPath is the JSON file listing which optional modules to load.
+// See moduleregistry.go for the core/optional module split.
+const moduleConfigPath = "cmd.json"
 
 func main() {
 	var (
@@ -78,44 +47,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// Migrate tables
-	usermodel.MigrateDB(db)
-	groupmodel.MigrateDB(db)
-	vouchermodel.MigrateDB(db)
-	pfconfigmodel.MigrateDB(db)
-	pfifacemodel.MigrateDB(db)
-	pflowmodel.MigrateDB(db)
-	dhcpmodel.MigrateDB(db)
-	submodel.MigrateDB(db)
-	fwmodel.MigrateDB(db)
-	runtimemodel.MigrateDB(db)
-	paymentmodel.MigrateDB(db)
-	tunnelmodel.MigrateDB(db)
-	collectionmodel.MigrateDB(db)
-	planmodel.MigrateDB(db)
-	policymodel.MigrateDB(db)
-	pppoemodel.MigrateDB(db)
-	vlanmodel.MigrateDB(db)
-	changemodel.MigrateDB(db)
-
-	userStore := usermodel.New(db)
-	groupStore := groupmodel.New(db)
-	policyStore := policymodel.New(db)
-	voucherStore := vouchermodel.New(db)
-	pfconfigStore := pfconfigmodel.New(db)
-	pfifaceStore := pfifacemodel.New(db)
-	pflowStore := pflowmodel.New(db)
-	subsStore := submodel.New(db)
-	fwStore := fwmodel.New(db)
-	dhcpStore := dhcpmodel.New(db)
-	rtStore := runtimemodel.New(db)
-	paymentStore := paymentmodel.New(db)
-	tunnelStore := tunnelmodel.New(db)
-	collectionStore := collectionmodel.New(db)
-	planStore := planmodel.New(db)
-	pppoeStore := pppoemodel.New(db)
-	vlanStore := vlanmodel.New(db)
-	changeStore := changemodel.New(db)
+	enabledModules := LoadModuleNames(moduleConfigPath)
 
 	r := chi.NewRouter()
 	r.Use(render.SetContentType(render.ContentTypeJSON))
@@ -131,28 +63,34 @@ func main() {
 		w.Write([]byte("ARKGATE API"))
 	})
 
-	// API login route - BasicAuth required, returns JWT access token
-	r.Get("/api/v1/login", security.Login(userStore))
+	// API login route - BasicAuth required, returns JWT access token. Not a
+	// pluggable module: security is core infra required by every other module.
+	r.Get("/api/v1/login", security.Login(usermodel.New(db)))
 
-	// Mount the user sub-router:
-	r.Mount("/api/v1/users", userroutes.UserRouter(userStore))
-	r.Mount("/api/v1/groups", grouproutes.GroupRouter(groupStore))
-	r.Mount("/api/v1/policies", policyroutes.PolicyRouter(policyStore))
-	r.Mount("/api/v1/vouchers", voucherroutes.VoucherRouter(voucherStore))
-	r.Mount("/api/v1/pfconfig", pfconfigroutes.PfconfigRouter(pfconfigStore))
-	r.Mount("/api/v1/pfiface", pfifaceroutes.PfifaceRouter(pfifaceStore))
-	r.Mount("/api/v1/pflow", pflowroutes.PflowRouter(pflowStore))
-	r.Mount("/api/v1/subs", subroutes.SubRouter(subsStore))
-	r.Mount("/api/v1/firewall", fwroutes.FwRouter(fwStore))
-	r.Mount("/api/v1/dhcps", dhcproutes.DhcpRouter(dhcpStore))
-	r.Mount("/api/v1/runtime", runtimeroutes.RuntimeRouter(rtStore))
-	r.Mount("/api/v1/payments", paymentroutes.PaymentRouter(paymentStore))
-	r.Mount("/api/v1/tunnels", tunnelroutes.TunnelRouter(tunnelStore))
-	r.Mount("/api/v1/collections", collectionroutes.CollectionRouter(collectionStore))
-	r.Mount("/api/v1/plans", planroutes.PlanRouter(planStore))
-	r.Mount("/api/v1/pppoe", pppoeroutes.PppoeRouter(pppoeStore))
-	r.Mount("/api/v1/vlans", vlanroutes.VlanRouter(vlanStore))
-	r.Mount("/api/v1/changes", changeroutes.ChangeRouter(changeStore))
-	go utils.CheckExpired(voucherStore)
+	// Core modules: always migrated and mounted.
+	for _, m := range coreModules {
+		log.Printf("Loading core module: %s", m.Name)
+		m.Load(r, db)
+	}
+
+	// Optional modules: migrated and mounted only if listed in the module config file.
+	var voucherStore vouchermodel.Crud
+	for _, name := range enabledModules {
+		m, ok := optionalModules[name]
+		if !ok {
+			log.Printf("Unknown module %q in %s, skipping", name, moduleConfigPath)
+			continue
+		}
+		log.Printf("Loading optional module: %s", m.Name)
+		m.Load(r, db)
+		if name == "vouchers" {
+			voucherStore = vouchermodel.New(db)
+		}
+	}
+
+	if voucherStore != nil {
+		go utils.CheckExpired(voucherStore)
+	}
+
 	http.ListenAndServe(fmt.Sprintf("%s:%s", app_ip, app_port), r)
 }
