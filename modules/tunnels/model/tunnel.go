@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/rbaylon/srvcman/utils/validate"
 	"gorm.io/gorm"
 )
 
@@ -30,7 +31,16 @@ func MigrateDB(db *gorm.DB) {
 
 // Bind interface as required by go-chi/render
 func (a *Tunnel) Bind(r *http.Request) error {
-	return nil
+	if err := validate.Required("router", a.Router); err != nil {
+		return err
+	}
+	if err := validate.Alnum("router", a.Router, 100); err != nil {
+		return err
+	}
+	if err := validate.IntRange("port", a.Port, 1, 65535); err != nil {
+		return err
+	}
+	return validate.Int("pid", a.Pid)
 }
 
 func (a *Tunnels) Bind(r *http.Request) error {

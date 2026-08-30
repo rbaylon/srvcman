@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/rbaylon/srvcman/utils/validate"
 	"gorm.io/gorm"
 )
 
@@ -33,7 +34,22 @@ func MigrateDB(db *gorm.DB) {
 
 // Bind interface as required by go-chi/render
 func (a *Dhcp) Bind(r *http.Request) error {
-	return nil
+	if err := validate.IP("subnet", a.Subnet); err != nil {
+		return err
+	}
+	if err := validate.IP("netmask", a.Netmask); err != nil {
+		return err
+	}
+	if err := validate.IPList("routers", a.Routers); err != nil {
+		return err
+	}
+	if err := validate.IPList("dnsservers", a.Dnsservers); err != nil {
+		return err
+	}
+	if err := validate.IPRange("range", a.Range); err != nil {
+		return err
+	}
+	return validate.Alnum("type", a.Type, 100)
 }
 
 func (a *Dhcps) Bind(r *http.Request) error {

@@ -2,11 +2,13 @@
 package usermodel
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 
 	"github.com/rbaylon/srvcman/database"
 	groupmodel "github.com/rbaylon/srvcman/modules/groups/model"
+	"github.com/rbaylon/srvcman/utils/validate"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
@@ -51,6 +53,37 @@ func MigrateDB(db *gorm.DB) {
 
 // Bind interface as required by go-chi/render
 func (a *User) Bind(r *http.Request) error {
+	if err := validate.Required("username", a.Username); err != nil {
+		return err
+	}
+	if err := validate.Alnum("username", a.Username, 100); err != nil {
+		return err
+	}
+	// Password is intentionally not charset-restricted (Alnum) - forcing
+	// passwords to be alphanumeric-only would weaken them. It's still
+	// length-bounded, and a minimum length is enforced since this field is
+	// bcrypt-hashed as-is by usermodel.Storage.Add/Update.
+	if err := validate.Required("password", a.Password); err != nil {
+		return err
+	}
+	if err := validate.MaxLen("password", a.Password, 100); err != nil {
+		return err
+	}
+	if len(a.Password) < 8 {
+		return fmt.Errorf("password must be at least 8 characters")
+	}
+	if err := validate.Required("firstname", a.Firstname); err != nil {
+		return err
+	}
+	if err := validate.Alnum("firstname", a.Firstname, 100); err != nil {
+		return err
+	}
+	if err := validate.Required("lastname", a.Lastname); err != nil {
+		return err
+	}
+	if err := validate.Alnum("lastname", a.Lastname, 100); err != nil {
+		return err
+	}
 	return nil
 }
 

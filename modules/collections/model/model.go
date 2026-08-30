@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	submodel "github.com/rbaylon/srvcman/modules/subs/model"
+	"github.com/rbaylon/srvcman/utils/validate"
 	"gorm.io/gorm"
 )
 
@@ -44,7 +45,23 @@ func MigrateDB(db *gorm.DB) {
 
 // Bind interface as required by go-chi/render
 func (a *Collection) Bind(r *http.Request) error {
-	return nil
+	if err := validate.Alnum("year", a.Year, 100); err != nil {
+		return err
+	}
+	for field, v := range map[string]int{
+		"jan": a.Jan, "feb": a.Feb, "mar": a.Mar, "apr": a.Apr,
+		"may": a.May, "jun": a.Jun, "jul": a.Jul, "aug": a.Aug,
+		"sep": a.Sep, "oct": a.Oct, "nov": a.Nov, "dec": a.Dec,
+		"sub_due": a.SubDue,
+	} {
+		if err := validate.Int(field, v); err != nil {
+			return err
+		}
+	}
+	if err := validate.Alnum("sub_name", a.SubName, 100); err != nil {
+		return err
+	}
+	return validate.Alnum("sub_plan", a.SubPlan, 100)
 }
 
 func (a *Collections) Bind(r *http.Request) error {

@@ -11,6 +11,7 @@ import (
 
 	vlanmodel "github.com/rbaylon/srvcman/modules/vlans/model"
 	"github.com/rbaylon/srvcman/utils"
+	"github.com/rbaylon/srvcman/utils/validate"
 	"gorm.io/gorm"
 )
 
@@ -42,7 +43,28 @@ func MigrateDB(db *gorm.DB) {
 
 // Bind interface as required by go-chi/render
 func (a *Pfiface) Bind(r *http.Request) error {
-	return nil
+	if err := validate.Alnum("name", a.Name, 100); err != nil {
+		return err
+	}
+	if err := validate.Alnum("speed", a.Speed, 100); err != nil {
+		return err
+	}
+	if err := validate.Alnum("device", a.Device, 100); err != nil {
+		return err
+	}
+	if err := validate.Alnum("type", a.Type, 100); err != nil {
+		return err
+	}
+	if err := validate.IP("gateway", a.Gateway); err != nil {
+		return err
+	}
+	if err := validate.IP("ip", a.Ip); err != nil {
+		return err
+	}
+	if err := validate.IP("netmask", a.Netmask); err != nil {
+		return err
+	}
+	return validate.IntRange("lb_percentage", a.LbPercentage, 0, 100)
 }
 
 func (a *Pfifaces) Bind(r *http.Request) error {

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/rbaylon/srvcman/utils/validate"
 	"gorm.io/gorm"
 )
 
@@ -44,7 +45,60 @@ func MigrateDB(db *gorm.DB) {
 
 // Bind interface as required by go-chi/render
 func (a *Sub) Bind(r *http.Request) error {
-	return nil
+	if err := validate.Alnum("first_name", a.FirstName, 100); err != nil {
+		return err
+	}
+	if err := validate.Alnum("last_name", a.LastName, 100); err != nil {
+		return err
+	}
+	if err := validate.IP("framed_ip", a.FramedIp); err != nil {
+		return err
+	}
+	if err := validate.Alnum("type", a.Type, 100); err != nil {
+		return err
+	}
+	if err := validate.Alnum("status", a.Status, 100); err != nil {
+		return err
+	}
+	if err := validate.MAC("mac", a.Mac); err != nil {
+		return err
+	}
+	if err := validate.Alnum("loc", a.Loc, 100); err != nil {
+		return err
+	}
+	if err := validate.Int("downspeed", a.Downspeed); err != nil {
+		return err
+	}
+	if err := validate.Int("upspeed", a.Upspeed); err != nil {
+		return err
+	}
+	if err := validate.Int("burstspeed", a.Burstspeed); err != nil {
+		return err
+	}
+	if err := validate.Int("duration", a.Duration); err != nil {
+		return err
+	}
+	if err := validate.IP("gateway", a.Gateway); err != nil {
+		return err
+	}
+	if err := validate.IntRange("priority", a.Priority, 0, 7); err != nil {
+		return err
+	}
+	if err := validate.Int("due_day", a.DueDay); err != nil {
+		return err
+	}
+	if err := validate.Int("later_count", a.LaterCount); err != nil {
+		return err
+	}
+	if err := validate.Alnum("plan", a.Plan, 100); err != nil {
+		return err
+	}
+	if err := validate.Alnum("pppusername", a.Pppusername, 100); err != nil {
+		return err
+	}
+	// Ppppassword is intentionally not charset-restricted, same reasoning as
+	// usermodel.User.Password.
+	return validate.MaxLen("ppppassword", a.Ppppassword, 100)
 }
 
 type Crud interface {

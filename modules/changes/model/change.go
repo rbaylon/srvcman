@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/rbaylon/srvcman/utils/validate"
 	"gorm.io/gorm"
 )
 
@@ -28,8 +29,18 @@ func MigrateDB(db *gorm.DB) {
 }
 
 // Bind interface as required by go-chi/render
+//
+// Note: security.audittrail() writes Change records directly via
+// changemodel.Storage.Add, bypassing Bind entirely, so this validation only
+// applies to changes created through the module's own HTTP routes.
 func (a *Change) Bind(r *http.Request) error {
-	return nil
+	if err := validate.Alnum("module", a.Module, 100); err != nil {
+		return err
+	}
+	if err := validate.SafeToken("data", a.Data, 100); err != nil {
+		return err
+	}
+	return validate.Alnum("applied", a.Applied, 100)
 }
 
 func (a *Changes) Bind(r *http.Request) error {

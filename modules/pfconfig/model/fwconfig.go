@@ -13,6 +13,7 @@ import (
 	submodel "github.com/rbaylon/srvcman/modules/subs/model"
 	vlanmodel "github.com/rbaylon/srvcman/modules/vlans/model"
 	vouchermodel "github.com/rbaylon/srvcman/modules/vouchers/model"
+	"github.com/rbaylon/srvcman/utils/validate"
 	"gorm.io/gorm"
 )
 
@@ -46,7 +47,25 @@ func MigrateDB(db *gorm.DB) {
 
 // Bind interface as required by go-chi/render
 func (a *Pfconfig) Bind(r *http.Request) error {
-	return nil
+	if err := validate.IPList("wifi_ip_list", a.WifiIpList); err != nil {
+		return err
+	}
+	if err := validate.IPList("subs_ip_list", a.SubsIpList); err != nil {
+		return err
+	}
+	if err := validate.IntRange("subs_portal_port", a.SubsPortalPort, 0, 65535); err != nil {
+		return err
+	}
+	if err := validate.IntRange("captive_portal_port", a.CaptivePortalPort, 0, 65535); err != nil {
+		return err
+	}
+	if err := validate.Alnum("router", a.Router, 100); err != nil {
+		return err
+	}
+	if err := validate.IP("dns", a.Dns); err != nil {
+		return err
+	}
+	return validate.Alnum("workername", a.Workername, 100)
 }
 
 type Crud interface {

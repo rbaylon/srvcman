@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/rbaylon/srvcman/utils/validate"
 	"gorm.io/gorm"
 )
 
@@ -21,7 +22,13 @@ type Runtimes struct {
 
 // Bind interface as required by go-chi/render
 func (a *Runtime) Bind(r *http.Request) error {
-	return nil
+	if err := validate.Alnum("action", a.Action, 100); err != nil {
+		return err
+	}
+	if err := validate.Alnum("status", a.Status, 100); err != nil {
+		return err
+	}
+	return validate.Int("workerid", a.Workerid)
 }
 
 // MigrateDB - Create the table if not exist in DB

@@ -9,6 +9,7 @@ import (
 
 	pfifacemodel "github.com/rbaylon/srvcman/modules/pfifaces/model"
 	planmodel "github.com/rbaylon/srvcman/modules/plans/model"
+	"github.com/rbaylon/srvcman/utils/validate"
 	"gorm.io/gorm"
 )
 
@@ -45,8 +46,62 @@ func MigrateDB(db *gorm.DB) {
 }
 
 // Bind interface as required by go-chi/render
+//
+// Source, SrcPort, Destination, DstPort, Gateway, Proto and AdvanceOpts use
+// SafeToken rather than Alnum: ToRule() embeds them directly into a pf.conf
+// rule string via fmt.Sprintf with no escaping, and they legitimately need
+// characters like '.', '/', ':', ',' for CIDR blocks, port ranges and
+// protocol lists. SafeToken still blocks quotes, semicolons, newlines,
+// braces, '$' and backticks, which would otherwise let a caller inject
+// arbitrary extra pf.conf directives through these fields.
 func (a *Fw) Bind(r *http.Request) error {
-	return nil
+	if err := validate.Alnum("status", a.Status, 100); err != nil {
+		return err
+	}
+	if err := validate.Alnum("action", a.Action, 100); err != nil {
+		return err
+	}
+	if err := validate.Alnum("direction", a.Direction, 100); err != nil {
+		return err
+	}
+	if err := validate.Alnum("log", a.Log, 100); err != nil {
+		return err
+	}
+	if err := validate.Alnum("quick", a.Quick, 100); err != nil {
+		return err
+	}
+	if err := validate.Alnum("interface", a.Interface, 100); err != nil {
+		return err
+	}
+	if err := validate.Alnum("address_family", a.AddressFamily, 100); err != nil {
+		return err
+	}
+	if err := validate.SafeToken("protocol", a.Proto, 100); err != nil {
+		return err
+	}
+	if err := validate.SafeToken("source", a.Source, 100); err != nil {
+		return err
+	}
+	if err := validate.SafeToken("source_port", a.SrcPort, 100); err != nil {
+		return err
+	}
+	if err := validate.SafeToken("destination", a.Destination, 100); err != nil {
+		return err
+	}
+	if err := validate.SafeToken("destination_port", a.DstPort, 100); err != nil {
+		return err
+	}
+	if err := validate.SafeToken("gateway", a.Gateway, 100); err != nil {
+		return err
+	}
+	// pf's "set prio" only accepts 0-7.
+	if err := validate.IntRange("priority", a.Priority, 0, 7); err != nil {
+		return err
+	}
+	if err := validate.Alnum("pipe", a.Pipe, 100); err != nil {
+		return err
+	}
+	return validate.SafeToken("advance_options", a.AdvanceOpts, 100)
 }
 
 type Crud interface {

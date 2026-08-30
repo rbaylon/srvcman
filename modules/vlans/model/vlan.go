@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/rbaylon/srvcman/utils/validate"
 	"gorm.io/gorm"
 )
 
@@ -28,7 +29,21 @@ func MigrateDB(db *gorm.DB) {
 
 // Bind interface as required by go-chi/render
 func (a *Vlan) Bind(r *http.Request) error {
-	return nil
+	if err := validate.Alnum("name", a.Name, 100); err != nil {
+		return err
+	}
+	if err := validate.Alnum("parent_device", a.ParentDevice, 100); err != nil {
+		return err
+	}
+	// 802.1Q reserves VLAN IDs 0 and 4095, so the usable range is 1-4094.
+	if err := validate.IntRange("vlan_tag", a.VlanTag, 1, 4094); err != nil {
+		return err
+	}
+	// pf's "set prio" only accepts 0-7.
+	if err := validate.IntRange("rx_prio", a.RxPrio, 0, 7); err != nil {
+		return err
+	}
+	return validate.IntRange("tx_prio", a.TxPrio, 0, 7)
 }
 
 type Crud interface {

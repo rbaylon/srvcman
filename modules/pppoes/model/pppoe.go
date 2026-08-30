@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	pfifacemodel "github.com/rbaylon/srvcman/modules/pfifaces/model"
+	"github.com/rbaylon/srvcman/utils/validate"
 	"gorm.io/gorm"
 )
 
@@ -31,7 +32,25 @@ func MigrateDB(db *gorm.DB) {
 
 // Bind interface as required by go-chi/render
 func (a *Pppoe) Bind(r *http.Request) error {
-	return nil
+	if err := validate.Alnum("name", a.Name, 100); err != nil {
+		return err
+	}
+	if err := validate.Alnum("device", a.Device, 100); err != nil {
+		return err
+	}
+	if err := validate.IP("ip", a.Ip); err != nil {
+		return err
+	}
+	// PoolAddress may be a CIDR block or an address range, so it needs '.',
+	// '/' and '-'; SafeToken still blocks characters that could inject
+	// extra config directives.
+	if err := validate.SafeToken("pool", a.PoolAddress, 100); err != nil {
+		return err
+	}
+	if err := validate.IPList("dns", a.DnsAddress); err != nil {
+		return err
+	}
+	return validate.Int("dev_index", a.DevIndex)
 }
 
 type Crud interface {

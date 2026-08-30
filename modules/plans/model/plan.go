@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/rbaylon/srvcman/utils/validate"
 	"gorm.io/gorm"
 )
 
@@ -28,7 +29,19 @@ func MigrateDB(db *gorm.DB) {
 
 // Bind interface as required by go-chi/render
 func (a *Plan) Bind(r *http.Request) error {
-	return nil
+	if err := validate.Alnum("plan", a.Plan, 100); err != nil {
+		return err
+	}
+	if err := validate.Int("downspeed", a.Downspeed); err != nil {
+		return err
+	}
+	if err := validate.Int("upspeed", a.Upspeed); err != nil {
+		return err
+	}
+	if err := validate.Int("stdown", a.SpeedTestDown); err != nil {
+		return err
+	}
+	return validate.Int("stup", a.SpeedTestUp)
 }
 
 type Crud interface {
