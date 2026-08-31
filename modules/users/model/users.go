@@ -75,13 +75,13 @@ func (a *User) Bind(r *http.Request) error {
 	if err := validate.Required("firstname", a.Firstname); err != nil {
 		return err
 	}
-	if err := validate.Alnum("firstname", a.Firstname, 100); err != nil {
+	if err := validate.AlnumSpace("firstname", a.Firstname, 100); err != nil {
 		return err
 	}
 	if err := validate.Required("lastname", a.Lastname); err != nil {
 		return err
 	}
-	if err := validate.Alnum("lastname", a.Lastname, 100); err != nil {
+	if err := validate.AlnumSpace("lastname", a.Lastname, 100); err != nil {
 		return err
 	}
 	return nil

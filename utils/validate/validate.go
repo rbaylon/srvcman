@@ -23,6 +23,9 @@ const MaxStringLen = 100
 
 var (
 	alnumRegex = regexp.MustCompile(`^[A-Za-z0-9]+$`)
+	// alnumSpaceRegex is alnumRegex plus interior spaces, for name-like
+	// fields (first/last name, location) that legitimately span words.
+	alnumSpaceRegex = regexp.MustCompile(`^[A-Za-z0-9 ]+$`)
 	// safeTokenRegex allows the punctuation commonly needed by pf.conf /
 	// dhcpd.conf fragments (CIDR blocks, port ranges, comma-separated
 	// lists) while rejecting quotes, semicolons, newlines, braces, '$' and
@@ -51,6 +54,24 @@ func Alnum(field, value string, maxLen int) error {
 		return fmt.Errorf("%s exceeds maximum length of %d characters", field, maxLen)
 	}
 	if !alnumRegex.MatchString(value) {
+		return fmt.Errorf("%s must be alphanumeric", field)
+	}
+	return nil
+}
+
+// AlnumSpace requires value to be empty or alphanumeric with interior
+// spaces allowed, up to maxLen characters (MaxStringLen if maxLen <= 0).
+// Use this instead of Alnum for fields like names or locations that may
+// contain multiple words.
+func AlnumSpace(field, value string, maxLen int) error {
+	if value == "" {
+		return nil
+	}
+	maxLen = maxLenOrDefault(maxLen)
+	if len(value) > maxLen {
+		return fmt.Errorf("%s exceeds maximum length of %d characters", field, maxLen)
+	}
+	if !alnumSpaceRegex.MatchString(value) {
 		return fmt.Errorf("%s must be alphanumeric", field)
 	}
 	return nil

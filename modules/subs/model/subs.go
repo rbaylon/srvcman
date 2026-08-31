@@ -45,10 +45,10 @@ func MigrateDB(db *gorm.DB) {
 
 // Bind interface as required by go-chi/render
 func (a *Sub) Bind(r *http.Request) error {
-	if err := validate.Alnum("first_name", a.FirstName, 100); err != nil {
+	if err := validate.AlnumSpace("first_name", a.FirstName, 100); err != nil {
 		return err
 	}
-	if err := validate.Alnum("last_name", a.LastName, 100); err != nil {
+	if err := validate.AlnumSpace("last_name", a.LastName, 100); err != nil {
 		return err
 	}
 	if err := validate.IP("framed_ip", a.FramedIp); err != nil {
@@ -63,7 +63,7 @@ func (a *Sub) Bind(r *http.Request) error {
 	if err := validate.MAC("mac", a.Mac); err != nil {
 		return err
 	}
-	if err := validate.Alnum("loc", a.Loc, 100); err != nil {
+	if err := validate.AlnumSpace("loc", a.Loc, 100); err != nil {
 		return err
 	}
 	if err := validate.Int("downspeed", a.Downspeed); err != nil {
