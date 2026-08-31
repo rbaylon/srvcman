@@ -60,7 +60,7 @@ func (a *Sub) Bind(r *http.Request) error {
 	if err := validate.Alnum("status", a.Status, 100); err != nil {
 		return err
 	}
-	if err := validate.MAC("mac", a.Mac); err != nil {
+	if err := validate.Alnum("mac", a.Mac, 100); err != nil {
 		return err
 	}
 	if err := validate.AlnumSpace("loc", a.Loc, 100); err != nil {
