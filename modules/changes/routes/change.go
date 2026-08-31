@@ -98,7 +98,7 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 				ifchange = true
 				cmds := []Acmd.Arkcmd{}
 				for _, v := range ifs {
-					mvcmd := Acmd.PrepareCmd("Backup Interface: "+v, "mv", []string{"/etc/hostname." + v, "/etc/hostname." +
+					mvcmd := Acmd.PrepareCmd("Backup Interface: "+v, "cp", []string{"/etc/hostname." + v, "/etc/hostname." +
 						v + "." + strconv.FormatInt(nowunix, 10)})
 					cmds = append(cmds, *mvcmd)
 					etcif := Acmd.PrepareCmd("Move iface to etc: "+v, "mv", []string{"/tmp/hostname." + v, "/etc/"})
@@ -118,7 +118,7 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 				}
 				_, err := os.Stat("/tmp/mygate")
 				if err == nil {
-					gwbackup := Acmd.PrepareCmd("Backup mygate", "mv", []string{"/etc/mygate",
+					gwbackup := Acmd.PrepareCmd("Backup mygate", "cp", []string{"/etc/mygate",
 						"/etc/mygate." + strconv.FormatInt(nowunix, 10)})
 					err = gwbackup.SendCmd(utils.GetUnixConn(usocket))
 					if err != nil {
