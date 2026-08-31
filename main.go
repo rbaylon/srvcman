@@ -1,22 +1,23 @@
 // Package main - Arkgate REST API.
 //
-//	Core Routes:
-//		/
-//      Method: GET
-//      Headers: NONE
-//      Return: Basic page for health check only
-//      Return-Status: 200
-//	  /api/v1/login
-//	    Method: GET
-//	    Headers: Authorization Basic
-//	    Return: JSON object with JWT
-//	    Return-Status: 200
+//		Core Routes:
+//			/
+//	     Method: GET
+//	     Headers: NONE
+//	     Return: Basic page for health check only
+//	     Return-Status: 200
+//		  /api/v1/login
+//		    Method: GET
+//		    Headers: Authorization Basic
+//		    Return: JSON object with JWT
+//		    Return-Status: 200
 package main
 
 import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
@@ -28,17 +29,20 @@ import (
 	"github.com/rbaylon/srvcman/utils"
 )
 
-// moduleConfigPath is the JSON file listing which optional modules to load.
-// See moduleregistry.go for the core/optional module split.
-const moduleConfigPath = "cmd.json"
-
 func main() {
+
 	var (
 		app_ip       = database.GetEnvVariable("APP_IP")
 		app_port     = database.GetEnvVariable("APP_PORT")
 		cors_allowed = database.GetEnvCors("CORS_ALLOWED")
 	)
-
+	wd, wderr := os.Getwd()
+	if wderr != nil {
+		log.Fatal("Failed to get current working directory: Possible filesystem issue.")
+	}
+	// moduleConfigPath is the JSON file listing which optional modules to load.
+	// See moduleregistry.go for the core/optional module split.
+	moduleConfigPath := wd + "/modules.json"
 	log.Printf("Arkgate Socket: %s:%s\n", app_ip, app_port)
 	log.Printf("Allowed for CORS %v", cors_allowed)
 
