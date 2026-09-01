@@ -310,7 +310,8 @@ func (s *Storage) GetTrafficStats() ([]TrafficStat, error) {
 			continue
 		}
 		fields := strings.Fields(line)
-		if len(fields) < 5 {
+		fieldslength := len(fields)
+		if fieldslength < 6 {
 			continue
 		}
 		name := fields[0]
