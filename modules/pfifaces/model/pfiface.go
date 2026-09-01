@@ -289,6 +289,13 @@ func (s *Storage) ListDevices() ([]string, error) {
 // Oerrs Obytes Coll. Each interface can appear on multiple rows (one per
 // address family); the counters are identical on every row for that
 // interface, so only the first row per device is kept.
+//
+// Network/Address are frequently blank (down interfaces, ones with no
+// configured link address, pseudo-devices), and strings.Fields drops blank
+// columns entirely, so those leading columns can't be indexed by a fixed
+// position from the left. The trailing 7 numeric columns (Ipkts Ierrs
+// Ibytes Opkts Oerrs Obytes Coll) are always present, so they're indexed
+// from the end of the row instead.
 func (s *Storage) GetTrafficStats() ([]TrafficStat, error) {
 	out, err := exec.Command("sh", "-c", "netstat -ibn").Output()
 	if err != nil {
@@ -302,15 +309,16 @@ func (s *Storage) GetTrafficStats() ([]TrafficStat, error) {
 			continue
 		}
 		fields := strings.Fields(line)
-		if len(fields) < 11 {
+		if len(fields) < 8 {
 			continue
 		}
 		name := fields[0]
 		if seen[name] {
 			continue
 		}
-		ibytes, errI := strconv.ParseUint(fields[6], 10, 64)
-		obytes, errO := strconv.ParseUint(fields[9], 10, 64)
+		n := len(fields)
+		ibytes, errI := strconv.ParseUint(fields[n-5], 10, 64)
+		obytes, errO := strconv.ParseUint(fields[n-2], 10, 64)
 		if errI != nil || errO != nil {
 			continue
 		}
