@@ -58,7 +58,7 @@ func (a *Collection) Bind(r *http.Request) error {
 			return err
 		}
 	}
-	if err := validate.Alnum("sub_name", a.SubName, 100); err != nil {
+	if err := validate.AlnumSpace("sub_name", a.SubName, 100); err != nil {
 		return err
 	}
 	return validate.Alnum("sub_plan", a.SubPlan, 100)
