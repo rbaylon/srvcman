@@ -34,6 +34,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/jwtauth/v5"
 	"github.com/go-chi/render"
+	collectionmodel "github.com/rbaylon/srvcman/modules/collections/model"
 	runtimemodel "github.com/rbaylon/srvcman/modules/runtimes/model"
 	"github.com/rbaylon/srvcman/modules/security"
 	submodel "github.com/rbaylon/srvcman/modules/subs/model"
@@ -146,6 +147,13 @@ func SubRouter(db submodel.Crud) chi.Router {
 		}
 		erradd := db.Add(sub)
 		if erradd == nil {
+			coldb := collectionmodel.New(db.GetDB())
+			if err := coldb.Add(collectionmodel.NewForSub(sub.ID)); err != nil {
+				// collections is an optional module - its table may not be
+				// migrated, so this is best-effort and shouldn't fail sub
+				// creation.
+				log.Println("create collection record for sub failed:", err)
+			}
 			render.JSON(w, r, sub)
 			return
 		}
