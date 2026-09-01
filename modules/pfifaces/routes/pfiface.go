@@ -8,6 +8,13 @@
 //	    Return-Status: 200 on Success
 //	                   500 on Error
 //
+//	  /api/v1/pfifaces/physical
+//	    Method: GET
+//	    Headers: Authorization Bearer
+//	    Return: JSON object with list of pfiface objects where physical is true
+//	    Return-Status: 200 on Success
+//	                   500 on Error
+//
 //	  /api/v1/pfifaces/<pfifaceId>
 //	    Method: GET|PUT|DELETE
 //	    Headers: Authorization Bearer
@@ -47,6 +54,14 @@ func PfifaceRouter(db pfifacemodel.Crud) chi.Router {
 
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		res, errdb := db.GetAll()
+		if errdb != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(errdb, "DB error", http.StatusInternalServerError))
+			return
+		}
+		render.JSON(w, r, res)
+	})
+	r.Get("/physical", func(w http.ResponseWriter, r *http.Request) {
+		res, errdb := db.GetPhysical()
 		if errdb != nil {
 			render.Render(w, r, utils.ErrInvalidRequest(errdb, "DB error", http.StatusInternalServerError))
 			return

@@ -21,6 +21,7 @@ type Pfiface struct {
 	Speed        string `json:"speed"`
 	Device       string `json:"device"`
 	Default      bool   `json:"default"`
+	Physical     bool   `json:"physical" gorm:"default:true"`
 	Type         string `json:"type"`
 	Gateway      string `json:"gateway"`
 	Ip           string `json:"ip"`
@@ -79,6 +80,7 @@ type Crud interface {
 	Update(pfiface *Pfiface) error
 	Delete(pfiface *Pfiface) error
 	GetByDevice(d string) (*Pfiface, error)
+	GetPhysical() ([]Pfiface, error)
 	GetDB() *gorm.DB
 	GenConF(pfiface *Pfiface) error
 }
@@ -192,6 +194,15 @@ func (s *Storage) GetByDevice(value string) (*Pfiface, error) {
 		return nil, result.Error
 	}
 	return &pfiface, nil
+}
+
+func (s *Storage) GetPhysical() ([]Pfiface, error) {
+	var pfifaces []Pfiface
+	result := s.DB.Where("Physical = ?", true).Find(&pfifaces)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return pfifaces, nil
 }
 
 func (s *Storage) Update(pfiface *Pfiface) error {
