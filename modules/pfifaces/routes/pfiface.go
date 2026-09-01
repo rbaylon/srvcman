@@ -15,6 +15,14 @@
 //	    Return-Status: 200 on Success
 //	                   500 on Error
 //
+//	  /api/v1/pfifaces/devices
+//	    Method: GET
+//	    Headers: Authorization Bearer
+//	    Return: JSON array of device names detected on this host (physical
+//	            NICs plus configured VLAN devices)
+//	    Return-Status: 200 on Success
+//	                   500 on Error
+//
 //	  /api/v1/pfifaces/<pfifaceId>
 //	    Method: GET|PUT|DELETE
 //	    Headers: Authorization Bearer
@@ -64,6 +72,14 @@ func PfifaceRouter(db pfifacemodel.Crud) chi.Router {
 		res, errdb := db.GetPhysical()
 		if errdb != nil {
 			render.Render(w, r, utils.ErrInvalidRequest(errdb, "DB error", http.StatusInternalServerError))
+			return
+		}
+		render.JSON(w, r, res)
+	})
+	r.Get("/devices", func(w http.ResponseWriter, r *http.Request) {
+		res, err := db.ListDevices()
+		if err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "Device list error", http.StatusInternalServerError))
 			return
 		}
 		render.JSON(w, r, res)

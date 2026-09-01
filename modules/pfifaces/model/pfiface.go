@@ -7,6 +7,8 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
+	"strconv"
 	"strings"
 
 	vlanmodel "github.com/rbaylon/srvcman/modules/vlans/model"
@@ -81,6 +83,7 @@ type Crud interface {
 	Delete(pfiface *Pfiface) error
 	GetByDevice(d string) (*Pfiface, error)
 	GetPhysical() ([]Pfiface, error)
+	ListDevices() ([]string, error)
 	GetDB() *gorm.DB
 	GenConF(pfiface *Pfiface) error
 }
@@ -203,6 +206,71 @@ func (s *Storage) GetPhysical() ([]Pfiface, error) {
 		return nil, result.Error
 	}
 	return pfifaces, nil
+}
+
+// pseudoDevicePrefixes are OpenBSD software/cloning interfaces to exclude
+// from ListDevices so only physical NICs are reported (VLAN devices are
+// reported separately, from the vlans table).
+var pseudoDevicePrefixes = []string{
+	"lo", "enc", "pflog", "pfsync", "vlan", "trunk", "carp", "wg", "tun", "tap",
+	"bridge", "gif", "gre", "mpe", "mpw", "ppp", "pppoe", "sec", "veb", "vport",
+	"svlan", "vether", "aggr",
+}
+
+func isPseudoDevice(name string) bool {
+	for _, prefix := range pseudoDevicePrefixes {
+		rest := strings.TrimPrefix(name, prefix)
+		if rest == name {
+			continue
+		}
+		if _, err := strconv.Atoi(rest); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+// listInterfaceNames runs ifconfig on this host and extracts the interface
+// names present, e.g. "em0: flags=8843<UP,..." -> "em0".
+func listInterfaceNames() ([]string, error) {
+	out, err := exec.Command("sh", "-c", "ifconfig -a | grep -Eo '^[a-zA-Z0-9]+:' | tr -d ':'").Output()
+	if err != nil {
+		return nil, err
+	}
+	return strings.Fields(string(out)), nil
+}
+
+// ListDevices returns the physical network interfaces present on this host,
+// plus any VLAN interface names configured in the vlans table.
+func (s *Storage) ListDevices() ([]string, error) {
+	devices := []string{}
+	seen := map[string]bool{}
+	names, err := listInterfaceNames()
+	if err != nil {
+		log.Println("ListDevices: failed to list interfaces:", err)
+	}
+	for _, name := range names {
+		if isPseudoDevice(name) || seen[name] {
+			continue
+		}
+		seen[name] = true
+		devices = append(devices, name)
+	}
+	vlandb := vlanmodel.New(s.GetDB())
+	vlans, err := vlandb.GetAll()
+	if err != nil {
+		log.Println("ListDevices: failed to get vlans:", err)
+	}
+	for _, v := range vlans {
+		for _, name := range []string{v.Name, v.ParentDevice} {
+			if name == "" || seen[name] {
+				continue
+			}
+			seen[name] = true
+			devices = append(devices, name)
+		}
+	}
+	return devices, nil
 }
 
 func (s *Storage) Update(pfiface *Pfiface) error {
