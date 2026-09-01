@@ -297,7 +297,7 @@ func (s *Storage) ListDevices() ([]string, error) {
 // Ibytes Opkts Oerrs Obytes Coll) are always present, so they're indexed
 // from the end of the row instead.
 func (s *Storage) GetTrafficStats() ([]TrafficStat, error) {
-	out, err := exec.Command("sh", "-c", "netstat -ibn").Output()
+	out, err := exec.Command("netstat", "-ibn").Output()
 	if err != nil {
 		return nil, err
 	}
@@ -316,9 +316,8 @@ func (s *Storage) GetTrafficStats() ([]TrafficStat, error) {
 		if seen[name] {
 			continue
 		}
-		n := len(fields)
-		ibytes, errI := strconv.ParseUint(fields[n-5], 10, 64)
-		obytes, errO := strconv.ParseUint(fields[n-2], 10, 64)
+		ibytes, errI := strconv.ParseUint(fields[4], 10, 64)
+		obytes, errO := strconv.ParseUint(fields[5], 10, 64)
 		if errI != nil || errO != nil {
 			continue
 		}
