@@ -84,8 +84,18 @@ type Crud interface {
 	GetByDevice(d string) (*Pfiface, error)
 	GetPhysical() ([]Pfiface, error)
 	ListDevices() ([]string, error)
+	GetTrafficStats() ([]TrafficStat, error)
 	GetDB() *gorm.DB
 	GenConF(pfiface *Pfiface) error
+}
+
+// TrafficStat is a point-in-time snapshot of an interface's cumulative byte
+// counters, as reported by the OS. Callers poll this repeatedly and diff
+// successive snapshots to derive a transfer rate.
+type TrafficStat struct {
+	Device string `json:"device"`
+	Ibytes uint64 `json:"ibytes"`
+	Obytes uint64 `json:"obytes"`
 }
 
 type Storage struct {
@@ -271,6 +281,43 @@ func (s *Storage) ListDevices() ([]string, error) {
 		}
 	}
 	return devices, nil
+}
+
+// GetTrafficStats reads current per-interface byte counters from this host
+// via `netstat -ibn`. OpenBSD's -b flag inserts Ibytes/Obytes columns into
+// the default -i layout: Name Mtu Network Address Ipkts Ierrs Ibytes Opkts
+// Oerrs Obytes Coll. Each interface can appear on multiple rows (one per
+// address family); the counters are identical on every row for that
+// interface, so only the first row per device is kept.
+func (s *Storage) GetTrafficStats() ([]TrafficStat, error) {
+	out, err := exec.Command("sh", "-c", "netstat -ibn").Output()
+	if err != nil {
+		return nil, err
+	}
+	stats := []TrafficStat{}
+	seen := map[string]bool{}
+	lines := strings.Split(string(out), "\n")
+	for i, line := range lines {
+		if i == 0 {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 11 {
+			continue
+		}
+		name := fields[0]
+		if seen[name] {
+			continue
+		}
+		ibytes, errI := strconv.ParseUint(fields[6], 10, 64)
+		obytes, errO := strconv.ParseUint(fields[9], 10, 64)
+		if errI != nil || errO != nil {
+			continue
+		}
+		seen[name] = true
+		stats = append(stats, TrafficStat{Device: name, Ibytes: ibytes, Obytes: obytes})
+	}
+	return stats, nil
 }
 
 func (s *Storage) Update(pfiface *Pfiface) error {

@@ -23,6 +23,15 @@
 //	    Return-Status: 200 on Success
 //	                   500 on Error
 //
+//	  /api/v1/pfifaces/traffic
+//	    Method: GET
+//	    Headers: Authorization Bearer
+//	    Return: JSON array of {device, ibytes, obytes} cumulative byte
+//	            counters read from this host right now. Callers poll this
+//	            repeatedly and diff successive snapshots to get a rate.
+//	    Return-Status: 200 on Success
+//	                   500 on Error
+//
 //	  /api/v1/pfifaces/<pfifaceId>
 //	    Method: GET|PUT|DELETE
 //	    Headers: Authorization Bearer
@@ -80,6 +89,14 @@ func PfifaceRouter(db pfifacemodel.Crud) chi.Router {
 		res, err := db.ListDevices()
 		if err != nil {
 			render.Render(w, r, utils.ErrInvalidRequest(err, "Device list error", http.StatusInternalServerError))
+			return
+		}
+		render.JSON(w, r, res)
+	})
+	r.Get("/traffic", func(w http.ResponseWriter, r *http.Request) {
+		res, err := db.GetTrafficStats()
+		if err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "Traffic stats error", http.StatusInternalServerError))
 			return
 		}
 		render.JSON(w, r, res)
