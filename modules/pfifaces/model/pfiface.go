@@ -305,6 +305,7 @@ func (s *Storage) GetTrafficStats() ([]TrafficStat, error) {
 	seen := map[string]bool{}
 	lines := strings.Split(string(out), "\n")
 	for i, line := range lines {
+		fmt.Println(line)
 		if i == 0 {
 			continue
 		}
