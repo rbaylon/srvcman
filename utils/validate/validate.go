@@ -31,6 +31,10 @@ var (
 	// lists) while rejecting quotes, semicolons, newlines, braces, '$' and
 	// backticks that could inject extra directives into a generated config.
 	safeTokenRegex = regexp.MustCompile(`^[A-Za-z0-9./:_,\* -]+$`)
+	// safeTokenExtRegex is safeTokenRegex plus '(', ')', '<' and '>', for
+	// fields that need parenthesized groups or comparison operators embedded
+	// in generated config fragments.
+	safeTokenExtRegex = regexp.MustCompile(`^[A-Za-z0-9./:_,\*()<> -]+$`)
 )
 
 func maxLenOrDefault(maxLen int) int {
@@ -111,6 +115,25 @@ func SafeToken(field, value string, maxLen int) error {
 		return fmt.Errorf("%s exceeds maximum length of %d characters", field, maxLen)
 	}
 	if !safeTokenRegex.MatchString(value) {
+		return fmt.Errorf("%s contains unsupported characters", field)
+	}
+	return nil
+}
+
+// SafeTokenExt is SafeToken plus '(', ')', '<' and '>', up to maxLen
+// characters (MaxStringLen if maxLen <= 0). Use this instead of SafeToken
+// for fields that need parenthesized groups or comparison operators (e.g.
+// pf.conf match expressions) while still rejecting quotes, semicolons,
+// braces, '$' and backticks.
+func SafeTokenExt(field, value string, maxLen int) error {
+	if value == "" {
+		return nil
+	}
+	maxLen = maxLenOrDefault(maxLen)
+	if len(value) > maxLen {
+		return fmt.Errorf("%s exceeds maximum length of %d characters", field, maxLen)
+	}
+	if !safeTokenExtRegex.MatchString(value) {
 		return fmt.Errorf("%s contains unsupported characters", field)
 	}
 	return nil

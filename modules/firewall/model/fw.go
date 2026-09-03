@@ -54,6 +54,10 @@ func MigrateDB(db *gorm.DB) {
 // protocol lists. SafeToken still blocks quotes, semicolons, newlines,
 // braces, '$' and backticks, which would otherwise let a caller inject
 // arbitrary extra pf.conf directives through these fields.
+//
+// AdvanceOpts uses SafeTokenExt instead of plain SafeToken: pf.conf options
+// like "max-src-conn-rate" and table/os-match expressions legitimately need
+// '(', ')', '<' and '>' (e.g. "(max-src-conn-rate 5/10)", "os \"<Windows\"").
 func (a *Fw) Bind(r *http.Request) error {
 	if err := validate.Alnum("status", a.Status, 100); err != nil {
 		return err
@@ -101,7 +105,7 @@ func (a *Fw) Bind(r *http.Request) error {
 	if err := validate.Alnum("pipe", a.Pipe, 100); err != nil {
 		return err
 	}
-	return validate.SafeToken("advance_options", a.AdvanceOpts, 100)
+	return validate.SafeTokenExt("advance_options", a.AdvanceOpts, 100)
 }
 
 type Crud interface {
