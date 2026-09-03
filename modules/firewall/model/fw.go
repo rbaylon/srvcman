@@ -105,7 +105,7 @@ func (a *Fw) Bind(r *http.Request) error {
 	if err := validate.Alnum("pipe", a.Pipe, 100); err != nil {
 		return err
 	}
-	return validate.SafeTokenExt("advance_options", a.AdvanceOpts, 100)
+	return validate.SafeTokenExt("advance_options", a.AdvanceOpts, 300)
 }
 
 type Crud interface {
