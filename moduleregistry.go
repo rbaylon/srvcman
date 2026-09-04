@@ -75,6 +75,7 @@ var coreModules = []Module{
 	}},
 	{"policies", func(r chi.Router, db *gorm.DB) {
 		policymodel.MigrateDB(db)
+		policymodel.SeedDefaultViewPolicies(db)
 		r.Mount("/api/v1/policies", policyroutes.PolicyRouter(policymodel.New(db)))
 	}},
 	{"pfconfig", func(r chi.Router, db *gorm.DB) {
