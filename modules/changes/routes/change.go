@@ -174,7 +174,7 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 			}
 			dhcpcmd["backup"].SendCmd(utils.GetUnixConn(usocket))
 			dhcpcmd["stage"].SendCmd(utils.GetUnixConn(usocket))
-			err = dhcprc["reload"].SendCmd(utils.GetUnixConn(usocket))
+			err = dhcprc["restart"].SendCmd(utils.GetUnixConn(usocket))
 			if err != nil {
 				exeerror := Changemodel.Change{}
 				exeerror.Module = "dhcpserver"
