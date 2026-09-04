@@ -14,15 +14,20 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
 	"github.com/go-chi/render"
 	"github.com/rbaylon/srvcman/database"
+	gatewaymonitormodel "github.com/rbaylon/srvcman/modules/gatewaymonitor/model"
 	"github.com/rbaylon/srvcman/modules/security"
 	usermodel "github.com/rbaylon/srvcman/modules/users/model"
 	vouchermodel "github.com/rbaylon/srvcman/modules/vouchers/model"
@@ -96,5 +101,28 @@ func main() {
 		go utils.CheckExpired(voucherStore)
 	}
 
-	http.ListenAndServe(fmt.Sprintf("%s:%s", app_ip, app_port), r)
+	srv := &http.Server{Addr: fmt.Sprintf("%s:%s", app_ip, app_port), Handler: r}
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Server failed: %v", err)
+		}
+	}()
+
+	// Block until asked to stop (rc.d sends SIGTERM; Ctrl-C sends SIGINT),
+	// then wind background work down before the process exits, rather than
+	// leaving goroutines - and whatever subprocess a ping check has
+	// in-flight - to be killed mid-stride.
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	log.Println("Shutting down...")
+
+	gatewaymonitormodel.StopAllMonitors()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Println("Server forced to shutdown:", err)
+	}
+	log.Println("Server exited")
 }

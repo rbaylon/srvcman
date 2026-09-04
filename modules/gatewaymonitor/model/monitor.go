@@ -61,13 +61,16 @@ func clearStatus(id uint) {
 }
 
 // pingOnce reports whether ip answered a single ping within pingTimeout.
-func pingOnce(ip string) bool {
+// It's derived from the monitor's own ctx so cancelling that ctx (StopMonitor
+// / StopAllMonitors) kills an in-flight ping process immediately instead of
+// leaving it to run out its own timeout.
+func pingOnce(ctx context.Context, ip string) bool {
 	if ip == "" {
 		return false
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), pingTimeout+time.Second)
+	pctx, cancel := context.WithTimeout(ctx, pingTimeout+time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "ping", "-c", "1", "-w", fmt.Sprintf("%d", int(pingTimeout.Seconds())), ip)
+	cmd := exec.CommandContext(pctx, "ping", "-c", "1", "-w", fmt.Sprintf("%d", int(pingTimeout.Seconds())), ip)
 	return cmd.Run() == nil
 }
 
@@ -98,6 +101,23 @@ func StopMonitor(id uint) {
 	clearStatus(id)
 }
 
+// StopAllMonitors stops every running monitor goroutine, killing any
+// in-flight ping process. Call this during graceful shutdown (e.g. on
+// SIGTERM/SIGINT) so background goroutines don't get abandoned mid-request
+// when the process exits.
+func StopAllMonitors() {
+	monitorMu.Lock()
+	for id, cancel := range monitors {
+		cancel()
+		delete(monitors, id)
+	}
+	monitorMu.Unlock()
+
+	statusMu.Lock()
+	statuses = map[uint]string{}
+	statusMu.Unlock()
+}
+
 // StartAllMonitors starts a monitor goroutine for every existing
 // GatewayMonitor row. Call this once at startup, after MigrateDB.
 func StartAllMonitors(db *gorm.DB) {
@@ -120,7 +140,7 @@ func monitorLoop(ctx context.Context, db *gorm.DB, id uint) {
 		if err := db.First(&gw, id).Error; err != nil {
 			return false
 		}
-		setStatus(id, pingOnce(gw.MonitorIp))
+		setStatus(id, pingOnce(ctx, gw.MonitorIp))
 		return true
 	}
 	if !check() {
