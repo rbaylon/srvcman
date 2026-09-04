@@ -16,6 +16,8 @@ import (
 	dhcproutes "github.com/rbaylon/srvcman/modules/dhcps/routes"
 	fwmodel "github.com/rbaylon/srvcman/modules/firewall/model"
 	fwroutes "github.com/rbaylon/srvcman/modules/firewall/routes"
+	gatewaymodel "github.com/rbaylon/srvcman/modules/gateways/model"
+	gatewayroutes "github.com/rbaylon/srvcman/modules/gateways/routes"
 	groupmodel "github.com/rbaylon/srvcman/modules/groups/model"
 	grouproutes "github.com/rbaylon/srvcman/modules/groups/routes"
 	paymentmodel "github.com/rbaylon/srvcman/modules/payments/model"
@@ -129,6 +131,10 @@ var optionalModules = map[string]Module{
 	"collections": {"collections", func(r chi.Router, db *gorm.DB) {
 		collectionmodel.MigrateDB(db)
 		r.Mount("/api/v1/collections", collectionroutes.CollectionRouter(collectionmodel.New(db)))
+	}},
+	"gateways": {"gateways", func(r chi.Router, db *gorm.DB) {
+		gatewaymodel.MigrateDB(db)
+		r.Mount("/api/v1/gateways", gatewayroutes.GatewayRouter(gatewaymodel.New(db)))
 	}},
 	"pppoe": {"pppoe", func(r chi.Router, db *gorm.DB) {
 		pppoemodel.MigrateDB(db)
