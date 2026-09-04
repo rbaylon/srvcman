@@ -121,6 +121,9 @@ func (s *Storage) Add(dhcpserver *DhcpServer) error {
 	if result.Error != nil {
 		return result.Error
 	}
+	if _, err := GenerateConf(s.DB); err != nil {
+		log.Println("dhcpserver: failed to regenerate dhcpd.conf:", err)
+	}
 	return nil
 }
 
@@ -147,6 +150,9 @@ func (s *Storage) Update(dhcpserver *DhcpServer) error {
 	if result.Error != nil {
 		return result.Error
 	}
+	if _, err := GenerateConf(s.DB); err != nil {
+		log.Println("dhcpserver: failed to regenerate dhcpd.conf:", err)
+	}
 	return nil
 }
 
@@ -154,6 +160,9 @@ func (s *Storage) Delete(dhcpserver *DhcpServer) error {
 	result := s.DB.Delete(dhcpserver)
 	if result.Error != nil {
 		return result.Error
+	}
+	if _, err := GenerateConf(s.DB); err != nil {
+		log.Println("dhcpserver: failed to regenerate dhcpd.conf:", err)
 	}
 	return nil
 }
