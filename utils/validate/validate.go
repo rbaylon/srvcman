@@ -41,6 +41,10 @@ var (
 	// "2000:2004", "2000 >< 2004"), and '{' '}' delimit a port list (e.g.
 	// "{ 22, 80, 443 }").
 	safeTokenPortRegex = regexp.MustCompile(`^[A-Za-z0-9./:_,\*!=<>{} -]+$`)
+	// safeTokenUpstreamRegex is safeTokenRegex plus '@', for upstream server
+	// address lists that pair a host with a port using '@' (e.g. unbound's
+	// DNS-over-TLS forward-addr entries like "1.1.1.1@853").
+	safeTokenUpstreamRegex = regexp.MustCompile(`^[A-Za-z0-9./:_,\*@ -]+$`)
 )
 
 func maxLenOrDefault(maxLen int) int {
@@ -159,6 +163,24 @@ func SafeTokenPort(field, value string, maxLen int) error {
 		return fmt.Errorf("%s exceeds maximum length of %d characters", field, maxLen)
 	}
 	if !safeTokenPortRegex.MatchString(value) {
+		return fmt.Errorf("%s contains unsupported characters", field)
+	}
+	return nil
+}
+
+// SafeTokenUpstream is SafeToken plus '@', up to maxLen characters
+// (MaxStringLen if maxLen <= 0). Use this for upstream server address
+// lists that pair a host with a port using '@', e.g. unbound's
+// "1.1.1.1@853, 1.0.0.1@853".
+func SafeTokenUpstream(field, value string, maxLen int) error {
+	if value == "" {
+		return nil
+	}
+	maxLen = maxLenOrDefault(maxLen)
+	if len(value) > maxLen {
+		return fmt.Errorf("%s exceeds maximum length of %d characters", field, maxLen)
+	}
+	if !safeTokenUpstreamRegex.MatchString(value) {
 		return fmt.Errorf("%s contains unsupported characters", field)
 	}
 	return nil

@@ -183,6 +183,28 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 				dhcpcmd["revert"].SendCmd(utils.GetUnixConn(usocket))
 			}
 		}
+		if changes["unbounddns"] > 0 {
+			unboundconf := rundir + "unbound.conf"
+			unboundcmd := Acmd.GetServiceCmds("unbound", "/usr/sbin/unbound-checkconf", "/var/unbound/etc/", unboundconf)
+			unboundrc := Acmd.GetRcCmds("unbound")
+			err := unboundcmd["check"].SendCmd(utils.GetUnixConn(usocket))
+			if err != nil {
+				exeerror := Changemodel.Change{}
+				exeerror.Module = "unbounddns"
+				exeerror.Data = "error in " + unboundconf
+				errors = append(errors, exeerror)
+			}
+			unboundcmd["backup"].SendCmd(utils.GetUnixConn(usocket))
+			unboundcmd["stage"].SendCmd(utils.GetUnixConn(usocket))
+			err = unboundrc["restart"].SendCmd(utils.GetUnixConn(usocket))
+			if err != nil {
+				exeerror := Changemodel.Change{}
+				exeerror.Module = "unbounddns"
+				exeerror.Data = "error applying " + unboundconf
+				errors = append(errors, exeerror)
+				unboundcmd["revert"].SendCmd(utils.GetUnixConn(usocket))
+			}
+		}
 		//utils.GetUnixConn(usocket)
 		render.JSON(w, r, errors)
 	})
