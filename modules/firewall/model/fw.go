@@ -47,17 +47,27 @@ func MigrateDB(db *gorm.DB) {
 
 // Bind interface as required by go-chi/render
 //
-// Source, SrcPort, Destination, DstPort, Gateway, Proto and AdvanceOpts use
-// SafeToken rather than Alnum: ToRule() embeds them directly into a pf.conf
-// rule string via fmt.Sprintf with no escaping, and they legitimately need
-// characters like '.', '/', ':', ',' for CIDR blocks, port ranges and
-// protocol lists. SafeToken still blocks quotes, semicolons, newlines,
-// braces, '$' and backticks, which would otherwise let a caller inject
-// arbitrary extra pf.conf directives through these fields.
+// Source, SrcPort, Destination, DstPort, Gateway and AdvanceOpts use
+// SafeToken (or a variant) rather than Alnum: ToRule() embeds them directly
+// into a pf.conf rule string via fmt.Sprintf with no escaping, and they
+// legitimately need characters like '.', '/', ':', ',' for CIDR blocks,
+// port ranges and protocol lists. SafeToken still blocks quotes,
+// semicolons, newlines, braces, '$' and backticks, which would otherwise
+// let a caller inject arbitrary extra pf.conf directives through these
+// fields.
 //
-// AdvanceOpts uses SafeTokenExt instead of plain SafeToken: pf.conf options
-// like "max-src-conn-rate" and table/os-match expressions legitimately need
-// '(', ')', '<' and '>' (e.g. "(max-src-conn-rate 5/10)", "os \"<Windows\"").
+// AdvanceOpts, Source and Destination use SafeTokenExt instead of plain
+// SafeToken: pf.conf options like "max-src-conn-rate", table references and
+// os-match expressions legitimately need '(', ')', '<' and '>' (e.g.
+// "(max-src-conn-rate 5/10)", "<blacklist>", "os \"<Windows\"").
+//
+// SrcPort and DstPort use SafeTokenPort instead of plain SafeToken: pf's
+// port-match syntax uses '!', '=', '<' and '>' as unary and binary
+// operators (e.g. "!= 22", "2000:2004", "2000 >< 2004", "2000 <> 2004").
+//
+// Proto is validated with Alnum: it's now driven by a fixed UI dropdown of
+// known protocol names, with a free-text "Other" fallback that only needs
+// to accept a bare alphanumeric protocol name (no list/range syntax).
 func (a *Fw) Bind(r *http.Request) error {
 	if err := validate.Alnum("status", a.Status, 100); err != nil {
 		return err
@@ -80,19 +90,19 @@ func (a *Fw) Bind(r *http.Request) error {
 	if err := validate.Alnum("address_family", a.AddressFamily, 100); err != nil {
 		return err
 	}
-	if err := validate.SafeToken("protocol", a.Proto, 100); err != nil {
+	if err := validate.Alnum("protocol", a.Proto, 100); err != nil {
 		return err
 	}
-	if err := validate.SafeToken("source", a.Source, 100); err != nil {
+	if err := validate.SafeTokenExt("source", a.Source, 100); err != nil {
 		return err
 	}
-	if err := validate.SafeToken("source_port", a.SrcPort, 100); err != nil {
+	if err := validate.SafeTokenPort("source_port", a.SrcPort, 100); err != nil {
 		return err
 	}
-	if err := validate.SafeToken("destination", a.Destination, 100); err != nil {
+	if err := validate.SafeTokenExt("destination", a.Destination, 100); err != nil {
 		return err
 	}
-	if err := validate.SafeToken("destination_port", a.DstPort, 100); err != nil {
+	if err := validate.SafeTokenPort("destination_port", a.DstPort, 100); err != nil {
 		return err
 	}
 	if err := validate.SafeToken("gateway", a.Gateway, 100); err != nil {
