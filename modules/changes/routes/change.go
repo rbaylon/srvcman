@@ -187,7 +187,7 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 			unboundconf := rundir + "unbound.conf"
 			unboundcmd := Acmd.GetServiceCmds("unbound", "/usr/sbin/unbound-checkconf", "/var/unbound/etc/", unboundconf)
 			unboundrc := Acmd.GetRcCmds("unbound")
-			err := unboundcmd["check"].SendCmd(utils.GetUnixConn(usocket))
+			err := unboundcmd["check_unbound"].SendCmd(utils.GetUnixConn(usocket))
 			if err != nil {
 				exeerror := Changemodel.Change{}
 				exeerror.Module = "unbounddns"
