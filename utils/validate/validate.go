@@ -35,10 +35,12 @@ var (
 	// fields that need parenthesized groups or comparison operators embedded
 	// in generated config fragments.
 	safeTokenExtRegex = regexp.MustCompile(`^[A-Za-z0-9./:_,\*()<> -]+$`)
-	// safeTokenPortRegex is safeTokenRegex plus '!', '=', '<' and '>', for
-	// pf.conf port-match expressions, which use those characters as unary
-	// and binary operators (e.g. "!= 22", "2000:2004", "2000 >< 2004").
-	safeTokenPortRegex = regexp.MustCompile(`^[A-Za-z0-9./:_,\*!=<> -]+$`)
+	// safeTokenPortRegex is safeTokenRegex plus '!', '=', '<', '>', '{' and
+	// '}', for pf.conf port-match expressions: '!' '=' '<' '>' are the
+	// unary/binary comparison and range operators (e.g. "!= 22",
+	// "2000:2004", "2000 >< 2004"), and '{' '}' delimit a port list (e.g.
+	// "{ 22, 80, 443 }").
+	safeTokenPortRegex = regexp.MustCompile(`^[A-Za-z0-9./:_,\*!=<>{} -]+$`)
 )
 
 func maxLenOrDefault(maxLen int) int {
@@ -143,10 +145,11 @@ func SafeTokenExt(field, value string, maxLen int) error {
 	return nil
 }
 
-// SafeTokenPort is SafeToken plus '!', '=', '<' and '>', up to maxLen
-// characters (MaxStringLen if maxLen <= 0). Use this for pf.conf port-match
-// fields, which support unary operators (=, !=, <, <=, >, >=) and binary
-// range operators (":", "><", "<>"), e.g. "2000:2004" or "2000 >< 2004".
+// SafeTokenPort is SafeToken plus '!', '=', '<', '>', '{' and '}', up to
+// maxLen characters (MaxStringLen if maxLen <= 0). Use this for pf.conf
+// port-match fields, which support unary operators (=, !=, <, <=, >, >=),
+// binary range operators (":", "><", "<>"), and '{' '}' delimited port
+// lists, e.g. "2000:2004", "2000 >< 2004" or "{ 22, 80, 443 }".
 func SafeTokenPort(field, value string, maxLen int) error {
 	if value == "" {
 		return nil
