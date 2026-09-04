@@ -12,6 +12,8 @@ import (
 	changeroutes "github.com/rbaylon/srvcman/modules/changes/routes"
 	collectionmodel "github.com/rbaylon/srvcman/modules/collections/model"
 	collectionroutes "github.com/rbaylon/srvcman/modules/collections/routes"
+	dhcpservermodel "github.com/rbaylon/srvcman/modules/dhcpserver/model"
+	dhcpserverroutes "github.com/rbaylon/srvcman/modules/dhcpserver/routes"
 	dhcpmodel "github.com/rbaylon/srvcman/modules/dhcps/model"
 	dhcproutes "github.com/rbaylon/srvcman/modules/dhcps/routes"
 	fwmodel "github.com/rbaylon/srvcman/modules/firewall/model"
@@ -115,6 +117,10 @@ var optionalModules = map[string]Module{
 	"dhcps": {"dhcps", func(r chi.Router, db *gorm.DB) {
 		dhcpmodel.MigrateDB(db)
 		r.Mount("/api/v1/dhcps", dhcproutes.DhcpRouter(dhcpmodel.New(db)))
+	}},
+	"dhcpserver": {"dhcpserver", func(r chi.Router, db *gorm.DB) {
+		dhcpservermodel.MigrateDB(db)
+		r.Mount("/api/v1/dhcpserver", dhcpserverroutes.DhcpServerRouter(dhcpservermodel.New(db)))
 	}},
 	"firewall": {"firewall", func(r chi.Router, db *gorm.DB) {
 		fwmodel.MigrateDB(db)
