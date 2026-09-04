@@ -8,6 +8,9 @@ import (
 	"sync"
 	"time"
 
+	Acmd "github.com/rbaylon/arkgatecmd"
+	"github.com/rbaylon/srvcman/database"
+	"github.com/rbaylon/srvcman/utils"
 	"gorm.io/gorm"
 )
 
@@ -139,16 +142,29 @@ func monitorLoop(ctx context.Context, db *gorm.DB, id uint) {
 	}
 }
 
+// routeBin is the OpenBSD route(8) binary, invoked via arkgated (see
+// sendArkCmd) since modifying the routing table needs privileges srvcman's
+// own process doesn't have.
+const routeBin = "/sbin/route"
+
+// sendArkCmd hands a command to arkgated over its Unix socket for
+// privileged execution - the same mechanism modules/changes uses to run
+// pfctl/mv as root. srvcman itself never execs route(8) directly.
+func sendArkCmd(name, binpath string, opts []string) error {
+	usocket := database.GetEnvVariable("UNIX_SOCKET")
+	cmd := Acmd.PrepareCmd(name, binpath, opts)
+	return cmd.SendCmd(utils.GetUnixConn(usocket))
+}
+
 // applyRoute installs a labeled OpenBSD host route so traffic to monitorIP
 // goes out via gatewayIP: `route add -host <monitorIP> <gatewayIP> -label <name>`.
 func applyRoute(name, monitorIP, gatewayIP string) error {
 	if monitorIP == "" || gatewayIP == "" {
 		return nil
 	}
-	cmd := exec.Command("route", "add", "-host", monitorIP, gatewayIP, "-label", name)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("route add -host %s %s -label %s: %v: %s", monitorIP, gatewayIP, name, err, out)
+	opts := []string{"add", "-host", monitorIP, gatewayIP, "-label", name}
+	if err := sendArkCmd("AddRoute: "+name, routeBin, opts); err != nil {
+		return fmt.Errorf("route add -host %s %s -label %s: %w", monitorIP, gatewayIP, name, err)
 	}
 	return nil
 }
@@ -158,10 +174,9 @@ func removeRoute(monitorIP string) error {
 	if monitorIP == "" {
 		return nil
 	}
-	cmd := exec.Command("route", "delete", "-host", monitorIP)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("route delete -host %s: %v: %s", monitorIP, err, out)
+	opts := []string{"delete", "-host", monitorIP}
+	if err := sendArkCmd("DeleteRoute: "+monitorIP, routeBin, opts); err != nil {
+		return fmt.Errorf("route delete -host %s: %w", monitorIP, err)
 	}
 	return nil
 }

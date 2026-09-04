@@ -18,8 +18,11 @@ import (
 // MonitorIp Ip -label Name") so traffic to MonitorIp actually goes out via
 // this gateway, and starts a background goroutine that pings MonitorIp on
 // an interval and records the result; Update/Delete keep the route and
-// goroutine in sync. Status is that goroutine's last result - it's not
-// stored in the DB, only held in memory (see monitor.go).
+// goroutine in sync. The route(8) calls are dispatched to arkgated over its
+// Unix socket rather than exec'd directly, since modifying the routing
+// table needs privileges srvcman's own process doesn't have (see
+// sendArkCmd in monitor.go). Status is the ping goroutine's last result -
+// it's not stored in the DB, only held in memory.
 type GatewayMonitor struct {
 	gorm.Model
 	Name       string `json:"name"`
