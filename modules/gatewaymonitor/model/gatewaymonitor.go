@@ -13,12 +13,20 @@ import (
 // other modules can point traffic at (pf's "route-to"), tracked alongside a
 // MonitorIp - the address this gateway's link health is checked against
 // (e.g. a ping target used to detect an upstream outage and fail over).
+//
+// Creating a record installs an OpenBSD host route ("route add -host
+// MonitorIp Ip -label Name") so traffic to MonitorIp actually goes out via
+// this gateway, and starts a background goroutine that pings MonitorIp on
+// an interval and records the result; Update/Delete keep the route and
+// goroutine in sync. Status is that goroutine's last result - it's not
+// stored in the DB, only held in memory (see monitor.go).
 type GatewayMonitor struct {
 	gorm.Model
 	Name       string `json:"name"`
 	Ip         string `json:"ip"`
 	MonitorIp  string `json:"monitor_ip"`
 	PfconfigID uint   `json:"pfconfig_id"`
+	Status     string `json:"status" gorm:"-"`
 }
 
 // MigrateDB - Create the table if not exist in DB
@@ -68,6 +76,10 @@ func (s *Storage) Add(gatewaymonitor *GatewayMonitor) error {
 	if result.Error != nil {
 		return result.Error
 	}
+	if err := applyRoute(gatewaymonitor.Name, gatewaymonitor.MonitorIp, gatewaymonitor.Ip); err != nil {
+		log.Println("gatewaymonitor: failed to add route:", err)
+	}
+	StartMonitor(s.DB, gatewaymonitor.ID)
 	return nil
 }
 
@@ -76,6 +88,9 @@ func (s *Storage) GetAll() ([]GatewayMonitor, error) {
 	result := s.DB.Find(&gatewaymonitors)
 	if result.Error != nil {
 		return nil, result.Error
+	}
+	for i := range gatewaymonitors {
+		gatewaymonitors[i].Status = getStatus(gatewaymonitors[i].ID)
 	}
 	return gatewaymonitors, nil
 }
@@ -86,13 +101,26 @@ func (s *Storage) GetById(id uint) (*GatewayMonitor, error) {
 	if result.Error != nil {
 		return nil, result.Error
 	}
+	gatewaymonitor.Status = getStatus(gatewaymonitor.ID)
 	return &gatewaymonitor, nil
 }
 
 func (s *Storage) Update(gatewaymonitor *GatewayMonitor) error {
+	var old GatewayMonitor
+	hasOld := s.DB.First(&old, gatewaymonitor.ID).Error == nil
+
 	result := s.DB.Save(gatewaymonitor)
 	if result.Error != nil {
 		return result.Error
+	}
+
+	if hasOld && old.MonitorIp != "" && (old.MonitorIp != gatewaymonitor.MonitorIp || old.Ip != gatewaymonitor.Ip) {
+		if err := removeRoute(old.MonitorIp); err != nil {
+			log.Println("gatewaymonitor: failed to remove old route:", err)
+		}
+	}
+	if err := applyRoute(gatewaymonitor.Name, gatewaymonitor.MonitorIp, gatewaymonitor.Ip); err != nil {
+		log.Println("gatewaymonitor: failed to update route:", err)
 	}
 	return nil
 }
@@ -101,6 +129,10 @@ func (s *Storage) Delete(gatewaymonitor *GatewayMonitor) error {
 	result := s.DB.Delete(gatewaymonitor)
 	if result.Error != nil {
 		return result.Error
+	}
+	StopMonitor(gatewaymonitor.ID)
+	if err := removeRoute(gatewaymonitor.MonitorIp); err != nil {
+		log.Println("gatewaymonitor: failed to remove route:", err)
 	}
 	return nil
 }
