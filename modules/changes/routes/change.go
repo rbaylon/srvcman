@@ -161,6 +161,28 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 				pfcmd["revert"].SendCmd(utils.GetUnixConn(usocket))
 			}
 		}
+		if changes["dhcpserver"] > 0 {
+			dhcpconf := rundir + "dhcpd.conf"
+			dhcpcmd := Acmd.GetServiceCmds("dhcpd", "/usr/sbin/dhcpd", "/etc/", dhcpconf)
+			dhcprc := Acmd.GetRcCmds("dhcpd")
+			err := dhcpcmd["check"].SendCmd(utils.GetUnixConn(usocket))
+			if err != nil {
+				exeerror := Changemodel.Change{}
+				exeerror.Module = "dhcpserver"
+				exeerror.Data = "error in " + dhcpconf
+				errors = append(errors, exeerror)
+			}
+			dhcpcmd["backup"].SendCmd(utils.GetUnixConn(usocket))
+			dhcpcmd["stage"].SendCmd(utils.GetUnixConn(usocket))
+			err = dhcprc["reload"].SendCmd(utils.GetUnixConn(usocket))
+			if err != nil {
+				exeerror := Changemodel.Change{}
+				exeerror.Module = "dhcpserver"
+				exeerror.Data = "error applying " + dhcpconf
+				errors = append(errors, exeerror)
+				dhcpcmd["revert"].SendCmd(utils.GetUnixConn(usocket))
+			}
+		}
 		//utils.GetUnixConn(usocket)
 		render.JSON(w, r, errors)
 	})
