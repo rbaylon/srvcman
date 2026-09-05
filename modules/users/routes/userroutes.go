@@ -34,6 +34,7 @@ import (
 	"github.com/go-chi/jwtauth/v5"
 	"github.com/go-chi/render"
 	groupmodel "github.com/rbaylon/srvcman/modules/groups/model"
+	policymodel "github.com/rbaylon/srvcman/modules/policies/model"
 	"github.com/rbaylon/srvcman/modules/security"
 	usermodel "github.com/rbaylon/srvcman/modules/users/model"
 	"github.com/rbaylon/srvcman/utils"
@@ -121,6 +122,29 @@ func UserRouter(db usermodel.Crud) chi.Router {
 			if err == nil {
 				user.Groups = append(user.Groups, group)
 				db.Update(&user)
+				poldb := policymodel.New(dbconn)
+				policy := policymodel.Policy{
+					Name:     "DefaultProfile" + user.Username,
+					Type:     "users",
+					Resource: "/api/v1/users/" + strconv.FormatUint(uint64(user.ID), 10),
+					Action:   "RO",
+					Groups:   []groupmodel.Group{group},
+				}
+				err = poldb.Add(&policy)
+				if err != nil {
+					fmt.Println("Error adding default user policy for user", user.Username)
+				}
+				defpols, err := policymodel.GetDefaultPolicies(poldb.DB)
+				if err != nil {
+					fmt.Println("Error getting default policies")
+				}
+				for _, p := range defpols {
+					p.Groups = append(p.Groups, group)
+					err = poldb.Update(&p)
+					if err != nil {
+						fmt.Println("Error adding group", group.Groupname, "to", policy.Name)
+					}
+				}
 				render.JSON(w, r, user)
 			}
 			return
