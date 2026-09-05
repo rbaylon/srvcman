@@ -49,3 +49,22 @@ func SeedDefaultViewPolicies(db *gorm.DB) {
 		}
 	}
 }
+
+// GetDefaultPolicies returns the current DB records for the default view
+// policies (matched by Name, see defaultViewPolicies), with their Groups
+// preloaded. This reflects live state - IDs and whatever Groups an admin
+// has since attached - rather than the static seed definitions, so a
+// record missing entirely (e.g. deleted after seeding) is simply absent
+// from the result instead of being reported as if it still existed.
+func GetDefaultPolicies(db *gorm.DB) ([]Policy, error) {
+	names := make([]string, len(defaultViewPolicies))
+	for i, p := range defaultViewPolicies {
+		names[i] = p.Name
+	}
+	var policies []Policy
+	result := db.Preload("Groups").Where("Name IN ?", names).Find(&policies)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return policies, nil
+}
