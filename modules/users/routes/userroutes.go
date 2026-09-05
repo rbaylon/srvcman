@@ -127,7 +127,7 @@ func UserRouter(db usermodel.Crud) chi.Router {
 					Name:     "DefaultProfile" + user.Username,
 					Type:     "users",
 					Resource: "/api/v1/users/" + strconv.FormatUint(uint64(user.ID), 10),
-					Action:   "RO",
+					Action:   "RW",
 					Groups:   []groupmodel.Group{group},
 				}
 				err = poldb.Add(&policy)
