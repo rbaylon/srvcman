@@ -126,7 +126,7 @@ func UserRouter(db usermodel.Crud) chi.Router {
 				policy := policymodel.Policy{
 					Name:     "DefaultProfile" + user.Username,
 					Type:     "users",
-					Resource: "/api/v1/users/" + strconv.FormatUint(uint64(user.ID), 10),
+					Resource: "/api/v1/users/username/" + user.Username,
 					Action:   "RW",
 					Groups:   []groupmodel.Group{group},
 				}
