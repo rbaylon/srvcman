@@ -31,8 +31,21 @@ var (
 	statusMu sync.RWMutex
 	statuses = map[uint]string{}
 
-	monitorMu sync.Mutex
-	monitors  = map[uint]context.CancelFunc{}
+	// monitorMu guards activeIDs, loopCancel and loopRunning below. A single
+	// shared goroutine (monitorLoop) checks every id in activeIDs on one
+	// ticker via one batched query per tick, rather than the previous
+	// one-goroutine-and-one-query-per-monitor design - under N monitors that
+	// meant N concurrent goroutines hitting the shared SQLite connection
+	// every tick, which under load caused ever-slower queries and eventually
+	// crashed the process inside go-sqlite3's cgo layer (incident
+	// 2026-09-05). See database.ConnectToDB, which now also caps the pool
+	// to a single connection and adds a busy-timeout - this batching change
+	// is the other half of that fix, cutting concurrent query count from N
+	// to 1 regardless of how many gateways are monitored.
+	monitorMu   sync.Mutex
+	activeIDs   = map[uint]bool{}
+	loopCancel  context.CancelFunc
+	loopRunning bool
 )
 
 func getStatus(id uint) string {
@@ -74,43 +87,45 @@ func pingOnce(ctx context.Context, ip string) bool {
 	return cmd.Run() == nil
 }
 
-// StartMonitor spawns a goroutine that periodically pings id's MonitorIp,
-// re-reading it from the DB on every tick so an Update takes effect without
-// a restart, and records the result for Status to report. It's a no-op if a
-// monitor for id is already running.
+// StartMonitor registers id for health-checking (a no-op if id is already
+// registered) and starts the shared monitor loop if it isn't already
+// running. The loop re-reads every registered id from the DB on every tick
+// in one batched query, so an Update to id's MonitorIp takes effect without
+// a restart, same as before.
 func StartMonitor(db *gorm.DB, id uint) {
 	monitorMu.Lock()
 	defer monitorMu.Unlock()
-	if _, ok := monitors[id]; ok {
-		return
+	activeIDs[id] = true
+	if !loopRunning {
+		ctx, cancel := context.WithCancel(context.Background())
+		loopCancel = cancel
+		loopRunning = true
+		go monitorLoop(ctx, db)
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	monitors[id] = cancel
-	go monitorLoop(ctx, db, id)
 }
 
-// StopMonitor stops id's monitor goroutine, if running, and clears its
-// last-known status.
+// StopMonitor stops health-checking id and clears its last-known status.
+// The shared loop keeps running (it's a no-op per tick once activeIDs is
+// empty) so a later StartMonitor doesn't need to restart anything.
 func StopMonitor(id uint) {
 	monitorMu.Lock()
-	if cancel, ok := monitors[id]; ok {
-		cancel()
-		delete(monitors, id)
-	}
+	delete(activeIDs, id)
 	monitorMu.Unlock()
 	clearStatus(id)
 }
 
-// StopAllMonitors stops every running monitor goroutine, killing any
-// in-flight ping process. Call this during graceful shutdown (e.g. on
-// SIGTERM/SIGINT) so background goroutines don't get abandoned mid-request
-// when the process exits.
+// StopAllMonitors stops the shared monitor loop, killing any in-flight ping
+// process, and clears every status. Call this during graceful shutdown
+// (e.g. on SIGTERM/SIGINT) so the background goroutine doesn't get
+// abandoned mid-request when the process exits.
 func StopAllMonitors() {
 	monitorMu.Lock()
-	for id, cancel := range monitors {
-		cancel()
-		delete(monitors, id)
+	if loopCancel != nil {
+		loopCancel()
+		loopCancel = nil
 	}
+	loopRunning = false
+	activeIDs = map[uint]bool{}
 	monitorMu.Unlock()
 
 	statusMu.Lock()
@@ -118,8 +133,8 @@ func StopAllMonitors() {
 	statusMu.Unlock()
 }
 
-// StartAllMonitors starts a monitor goroutine for every existing
-// GatewayMonitor row. Call this once at startup, after MigrateDB.
+// StartAllMonitors registers every existing GatewayMonitor row and starts
+// the shared monitor loop. Call this once at startup, after MigrateDB.
 func StartAllMonitors(db *gorm.DB) {
 	var gateways []GatewayMonitor
 	if err := db.Find(&gateways).Error; err != nil {
@@ -131,22 +146,53 @@ func StartAllMonitors(db *gorm.DB) {
 	}
 }
 
-// monitorLoop checks id's MonitorIp immediately, then on every tick of
-// pingInterval, until ctx is cancelled (StopMonitor) or the record no
-// longer exists (deleted through some path other than Storage.Delete).
-func monitorLoop(ctx context.Context, db *gorm.DB, id uint) {
-	check := func() bool {
-		var gw GatewayMonitor
-		if err := db.First(&gw, id).Error; err != nil {
-			return false
+// monitorLoop checks every registered monitor immediately, then on every
+// tick of pingInterval, until ctx is cancelled (StopAllMonitors). Each tick
+// does exactly one batched query for every currently-registered id (instead
+// of one query per monitor per tick), then pings them concurrently; an id
+// whose row no longer exists (deleted through some path other than
+// Storage.Delete) is dropped from activeIDs.
+func monitorLoop(ctx context.Context, db *gorm.DB) {
+	check := func() {
+		monitorMu.Lock()
+		ids := make([]uint, 0, len(activeIDs))
+		for id := range activeIDs {
+			ids = append(ids, id)
 		}
-		setStatus(id, pingOnce(ctx, gw.MonitorIp))
-		return true
+		monitorMu.Unlock()
+		if len(ids) == 0 {
+			return
+		}
+
+		var gateways []GatewayMonitor
+		if err := db.Find(&gateways, ids).Error; err != nil {
+			log.Println("gatewaymonitor: batch load failed:", err)
+			return
+		}
+
+		found := make(map[uint]bool, len(gateways))
+		var wg sync.WaitGroup
+		for _, gw := range gateways {
+			found[gw.ID] = true
+			wg.Add(1)
+			go func(id uint, ip string) {
+				defer wg.Done()
+				setStatus(id, pingOnce(ctx, ip))
+			}(gw.ID, gw.MonitorIp)
+		}
+		wg.Wait()
+
+		monitorMu.Lock()
+		for id := range activeIDs {
+			if !found[id] {
+				delete(activeIDs, id)
+				clearStatus(id)
+			}
+		}
+		monitorMu.Unlock()
 	}
-	if !check() {
-		StopMonitor(id)
-		return
-	}
+
+	check()
 	ticker := time.NewTicker(pingInterval)
 	defer ticker.Stop()
 	for {
@@ -154,10 +200,7 @@ func monitorLoop(ctx context.Context, db *gorm.DB, id uint) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if !check() {
-				StopMonitor(id)
-				return
-			}
+			check()
 		}
 	}
 }

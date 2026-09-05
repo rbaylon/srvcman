@@ -53,10 +53,23 @@ func ConnectToDB() (*gorm.DB, error) {
 		return db, nil
 	} else {
 		var dbname = GetEnvVariable("DB_NAME")
-		db, err := gorm.Open(sqlite.Open(dbname+".db"), &gorm.Config{})
+		// _busy_timeout lets a connection wait for a lock instead of failing
+		// immediately, and WAL lets readers proceed while a write is in
+		// flight - both needed because SQLite only ever allows one writer at
+		// a time. SetMaxOpenConns(1) below is the other half of this: it
+		// keeps database/sql from opening additional concurrent connections
+		// under load, which under the previous unbounded-pool config caused
+		// a crash in mattn/go-sqlite3's cgo layer during concurrent
+		// connection Open() (see incident 2026-09-05).
+		db, err := gorm.Open(sqlite.Open(dbname+".db?_busy_timeout=5000&_journal_mode=WAL"), &gorm.Config{})
 		if err != nil {
 			return nil, err
 		}
+		sqlDB, err := db.DB()
+		if err != nil {
+			return nil, err
+		}
+		sqlDB.SetMaxOpenConns(1)
 		return db, nil
 	}
 }
