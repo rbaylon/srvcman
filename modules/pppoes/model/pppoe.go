@@ -80,6 +80,9 @@ func (s *Storage) AddBulk(pppoes []Pppoe) error {
 	if result.Error != nil {
 		return result.Error
 	}
+	if _, err := GenerateConf(s.DB); err != nil {
+		log.Println("pppoes: failed to regenerate npppd.conf:", err)
+	}
 	return nil
 }
 
@@ -119,6 +122,9 @@ func (s *Storage) Add(pppoe *Pppoe) error {
 	ifaceres := s.DB.Create(&pfiface)
 	if ifaceres.Error != nil {
 		return ifaceres.Error
+	}
+	if _, err := GenerateConf(s.DB); err != nil {
+		log.Println("pppoes: failed to regenerate npppd.conf:", err)
 	}
 	return nil
 }
@@ -176,6 +182,9 @@ func (s *Storage) Update(pppoe *Pppoe) error {
 	if result.Error != nil {
 		return result.Error
 	}
+	if _, err := GenerateConf(s.DB); err != nil {
+		log.Println("pppoes: failed to regenerate npppd.conf:", err)
+	}
 	return nil
 }
 
@@ -193,6 +202,9 @@ func (s *Storage) Delete(pppoe *Pppoe) error {
 	result := s.DB.Delete(pppoe)
 	if result.Error != nil {
 		return result.Error
+	}
+	if _, err := GenerateConf(s.DB); err != nil {
+		log.Println("pppoes: failed to regenerate npppd.conf:", err)
 	}
 	return nil
 }

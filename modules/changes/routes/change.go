@@ -205,6 +205,23 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 				unboundcmd["revert"].SendCmd(utils.GetUnixConn(usocket))
 			}
 		}
+		if changes["pppoes"] > 0 {
+			npppdconf := rundir + "npppd.conf"
+			// npppd has no built-in config-validate mode (unlike pfctl -nf
+			// or unbound-checkconf), so there's no "check" step here.
+			npppdcmd := Acmd.GetServiceCmds("npppd", "", "/etc/npppd/", npppdconf)
+			npppdrc := Acmd.GetRcCmds("npppd")
+			npppdcmd["backup"].SendCmd(utils.GetUnixConn(usocket))
+			npppdcmd["stage"].SendCmd(utils.GetUnixConn(usocket))
+			err := npppdrc["restart"].SendCmd(utils.GetUnixConn(usocket))
+			if err != nil {
+				exeerror := Changemodel.Change{}
+				exeerror.Module = "pppoes"
+				exeerror.Data = "error applying " + npppdconf
+				errors = append(errors, exeerror)
+				npppdcmd["revert"].SendCmd(utils.GetUnixConn(usocket))
+			}
+		}
 		//utils.GetUnixConn(usocket)
 		render.JSON(w, r, errors)
 	})

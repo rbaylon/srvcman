@@ -8,6 +8,14 @@
 //	    Return-Status: 200 on Success
 //	                   500 on Error
 //
+//	  /api/v1/pppoes/conf
+//	    Method: GET
+//	    Headers: Authorization Bearer
+//	    Return: JSON {"conf": "<generated npppd.conf text>"}, freshly
+//	            rendered from the current Pppoe rows
+//	    Return-Status: 200 on Success
+//	                   500 on Error
+//
 //	  /api/v1/pppoes/<pppoeId>
 //	    Method: GET|PUT|DELETE
 //	    Headers: Authorization Bearer
@@ -52,6 +60,14 @@ func PppoeRouter(db pppoemodel.Crud) chi.Router {
 			return
 		}
 		render.JSON(w, r, res)
+	})
+	r.Get("/conf", func(w http.ResponseWriter, r *http.Request) {
+		conf, err := pppoemodel.GenerateConf(dbconn)
+		if err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "DB error", http.StatusInternalServerError))
+			return
+		}
+		render.JSON(w, r, map[string]string{"conf": conf})
 	})
 	r.Get("/{pppoeId}", func(w http.ResponseWriter, r *http.Request) {
 		id, err := strconv.Atoi(chi.URLParam(r, "pppoeId"))
