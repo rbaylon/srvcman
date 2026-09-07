@@ -123,14 +123,25 @@ func UserRouter(db usermodel.Crud) chi.Router {
 				user.Groups = append(user.Groups, group)
 				db.Update(&user)
 				poldb := policymodel.New(dbconn)
-				policy := policymodel.Policy{
-					Name:     "DefaultProfile" + user.Username,
+				ropolicy := policymodel.Policy{
+					Name:     "DefaultProfile" + user.Username + "RO",
 					Type:     "users",
 					Resource: "/api/v1/users/username/" + user.Username,
-					Action:   "RW",
+					Action:   "RO",
 					Groups:   []groupmodel.Group{group},
 				}
-				err = poldb.Add(&policy)
+				err = poldb.Add(&ropolicy)
+				if err != nil {
+					fmt.Println("Error adding default user policy for user", user.Username)
+				}
+				rwpolicy := policymodel.Policy{
+					Name:     "DefaultProfile" + user.Username + "RW",
+					Type:     "users",
+					Resource: "/api/v1/users/" + strconv.FormatUint(uint64(user.ID), 10),
+					Action:   "Rw",
+					Groups:   []groupmodel.Group{group},
+				}
+				err = poldb.Add(&rwpolicy)
 				if err != nil {
 					fmt.Println("Error adding default user policy for user", user.Username)
 				}
