@@ -20,6 +20,9 @@ const pingInterval = 10 * time.Second
 // pingTimeout bounds how long a single health-check ping is allowed to run.
 const pingTimeout = 2 * time.Second
 
+// historyWindow is how far back SuccessCount/FailedCount look.
+const historyWindow = 5 * time.Minute
+
 // Status values reported on GatewayMonitor.Status.
 const (
 	StatusUnknown = "unknown"
@@ -27,9 +30,19 @@ const (
 	StatusDown    = "down"
 )
 
+// pingRecord is one health-check result, kept only long enough to answer
+// "how many succeeded/failed in the last historyWindow".
+type pingRecord struct {
+	at      time.Time
+	success bool
+}
+
 var (
 	statusMu sync.RWMutex
 	statuses = map[uint]string{}
+
+	historyMu sync.Mutex
+	history   = map[uint][]pingRecord{}
 
 	// monitorMu guards activeIDs, loopCancel and loopRunning below. A single
 	// shared goroutine (monitorLoop) checks every id in activeIDs on one
@@ -73,6 +86,49 @@ func clearStatus(id uint) {
 	delete(statuses, id)
 }
 
+// recordPing appends a health-check result to id's history and prunes
+// anything older than historyWindow. history[id] is append-only within the
+// window, so this is O(1) amortized despite the linear prune scan (the
+// slice is bounded to roughly historyWindow/pingInterval entries, ~30 by
+// default).
+func recordPing(id uint, success bool) {
+	now := time.Now()
+	historyMu.Lock()
+	defer historyMu.Unlock()
+	h := append(history[id], pingRecord{at: now, success: success})
+	cutoff := now.Add(-historyWindow)
+	i := 0
+	for i < len(h) && h[i].at.Before(cutoff) {
+		i++
+	}
+	history[id] = h[i:]
+}
+
+// pingCounts reports how many of id's health checks in the last
+// historyWindow succeeded vs. failed.
+func pingCounts(id uint) (success, failed int) {
+	cutoff := time.Now().Add(-historyWindow)
+	historyMu.Lock()
+	defer historyMu.Unlock()
+	for _, rec := range history[id] {
+		if rec.at.Before(cutoff) {
+			continue
+		}
+		if rec.success {
+			success++
+		} else {
+			failed++
+		}
+	}
+	return success, failed
+}
+
+func clearHistory(id uint) {
+	historyMu.Lock()
+	defer historyMu.Unlock()
+	delete(history, id)
+}
+
 // pingOnce reports whether ip answered a single ping within pingTimeout.
 // It's derived from the monitor's own ctx so cancelling that ctx (StopMonitor
 // / StopAllMonitors) kills an in-flight ping process immediately instead of
@@ -104,20 +160,22 @@ func StartMonitor(db *gorm.DB, id uint) {
 	}
 }
 
-// StopMonitor stops health-checking id and clears its last-known status.
-// The shared loop keeps running (it's a no-op per tick once activeIDs is
-// empty) so a later StartMonitor doesn't need to restart anything.
+// StopMonitor stops health-checking id and clears its last-known status and
+// ping history. The shared loop keeps running (it's a no-op per tick once
+// activeIDs is empty) so a later StartMonitor doesn't need to restart
+// anything.
 func StopMonitor(id uint) {
 	monitorMu.Lock()
 	delete(activeIDs, id)
 	monitorMu.Unlock()
 	clearStatus(id)
+	clearHistory(id)
 }
 
 // StopAllMonitors stops the shared monitor loop, killing any in-flight ping
-// process, and clears every status. Call this during graceful shutdown
-// (e.g. on SIGTERM/SIGINT) so the background goroutine doesn't get
-// abandoned mid-request when the process exits.
+// process, and clears every status and ping history. Call this during
+// graceful shutdown (e.g. on SIGTERM/SIGINT) so the background goroutine
+// doesn't get abandoned mid-request when the process exits.
 func StopAllMonitors() {
 	monitorMu.Lock()
 	if loopCancel != nil {
@@ -131,6 +189,10 @@ func StopAllMonitors() {
 	statusMu.Lock()
 	statuses = map[uint]string{}
 	statusMu.Unlock()
+
+	historyMu.Lock()
+	history = map[uint][]pingRecord{}
+	historyMu.Unlock()
 }
 
 // StartAllMonitors registers every existing GatewayMonitor row and starts
@@ -177,7 +239,9 @@ func monitorLoop(ctx context.Context, db *gorm.DB) {
 			wg.Add(1)
 			go func(id uint, ip string) {
 				defer wg.Done()
-				setStatus(id, pingOnce(ctx, ip))
+				up := pingOnce(ctx, ip)
+				setStatus(id, up)
+				recordPing(id, up)
 			}(gw.ID, gw.MonitorIp)
 		}
 		wg.Wait()
@@ -187,6 +251,7 @@ func monitorLoop(ctx context.Context, db *gorm.DB) {
 			if !found[id] {
 				delete(activeIDs, id)
 				clearStatus(id)
+				clearHistory(id)
 			}
 		}
 		monitorMu.Unlock()

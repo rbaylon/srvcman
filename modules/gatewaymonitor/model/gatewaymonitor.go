@@ -21,15 +21,19 @@ import (
 // goroutine in sync. The route(8) calls are dispatched to arkgated over its
 // Unix socket rather than exec'd directly, since modifying the routing
 // table needs privileges srvcman's own process doesn't have (see
-// sendArkCmd in monitor.go). Status is the ping goroutine's last result -
-// it's not stored in the DB, only held in memory.
+// sendArkCmd in monitor.go). Status is the ping goroutine's last result;
+// SuccessCount/FailedCount are how many of its health checks in the last
+// 5 minutes (see historyWindow) succeeded vs. failed. None of the three
+// are stored in the DB, only held in memory.
 type GatewayMonitor struct {
 	gorm.Model
-	Name       string `json:"name"`
-	Ip         string `json:"ip"`
-	MonitorIp  string `json:"monitor_ip"`
-	PfconfigID uint   `json:"pfconfig_id"`
-	Status     string `json:"status" gorm:"-"`
+	Name         string `json:"name"`
+	Ip           string `json:"ip"`
+	MonitorIp    string `json:"monitor_ip"`
+	PfconfigID   uint   `json:"pfconfig_id"`
+	Status       string `json:"status" gorm:"-"`
+	SuccessCount int    `json:"success_count" gorm:"-"`
+	FailedCount  int    `json:"failed_count" gorm:"-"`
 }
 
 // MigrateDB - Create the table if not exist in DB
@@ -86,6 +90,13 @@ func (s *Storage) Add(gatewaymonitor *GatewayMonitor) error {
 	return nil
 }
 
+// populateMonitorStats fills g's in-memory Status/SuccessCount/FailedCount
+// from the current monitor state.
+func populateMonitorStats(g *GatewayMonitor) {
+	g.Status = getStatus(g.ID)
+	g.SuccessCount, g.FailedCount = pingCounts(g.ID)
+}
+
 func (s *Storage) GetAll() ([]GatewayMonitor, error) {
 	var gatewaymonitors []GatewayMonitor
 	result := s.DB.Find(&gatewaymonitors)
@@ -93,7 +104,7 @@ func (s *Storage) GetAll() ([]GatewayMonitor, error) {
 		return nil, result.Error
 	}
 	for i := range gatewaymonitors {
-		gatewaymonitors[i].Status = getStatus(gatewaymonitors[i].ID)
+		populateMonitorStats(&gatewaymonitors[i])
 	}
 	return gatewaymonitors, nil
 }
@@ -104,7 +115,7 @@ func (s *Storage) GetById(id uint) (*GatewayMonitor, error) {
 	if result.Error != nil {
 		return nil, result.Error
 	}
-	gatewaymonitor.Status = getStatus(gatewaymonitor.ID)
+	populateMonitorStats(&gatewaymonitor)
 	return &gatewaymonitor, nil
 }
 
