@@ -153,7 +153,7 @@ func UserRouter(db usermodel.Crud) chi.Router {
 					p.Groups = append(p.Groups, group)
 					err = poldb.Update(&p)
 					if err != nil {
-						fmt.Println("Error adding group", group.Groupname, "to", policy.Name)
+						fmt.Println("Error adding group", group.Groupname, "to", p.Name)
 					}
 				}
 				render.JSON(w, r, user)
