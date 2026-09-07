@@ -38,6 +38,8 @@ import (
 	pppoeroutes "github.com/rbaylon/srvcman/modules/pppoes/routes"
 	runtimemodel "github.com/rbaylon/srvcman/modules/runtimes/model"
 	runtimeroutes "github.com/rbaylon/srvcman/modules/runtimes/routes"
+	staticroutesmodel "github.com/rbaylon/srvcman/modules/staticroutes/model"
+	staticroutesroutes "github.com/rbaylon/srvcman/modules/staticroutes/routes"
 	submodel "github.com/rbaylon/srvcman/modules/subs/model"
 	subroutes "github.com/rbaylon/srvcman/modules/subs/routes"
 	tunnelmodel "github.com/rbaylon/srvcman/modules/tunnels/model"
@@ -149,6 +151,10 @@ var optionalModules = map[string]Module{
 		gatewaymonitormodel.MigrateDB(db)
 		gatewaymonitormodel.StartAllMonitors(db)
 		r.Mount("/api/v1/gatewaymonitor", gatewaymonitorroutes.GatewayMonitorRouter(gatewaymonitormodel.New(db)))
+	}},
+	"staticroutes": {"staticroutes", func(r chi.Router, db *gorm.DB) {
+		staticroutesmodel.MigrateDB(db)
+		r.Mount("/api/v1/staticroutes", staticroutesroutes.StaticRouteRouter(staticroutesmodel.New(db)))
 	}},
 	"pppoe": {"pppoe", func(r chi.Router, db *gorm.DB) {
 		pppoemodel.MigrateDB(db)
