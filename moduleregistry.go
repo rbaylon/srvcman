@@ -149,6 +149,7 @@ var optionalModules = map[string]Module{
 	}},
 	"gatewaymonitor": {"gatewaymonitor", func(r chi.Router, db *gorm.DB) {
 		gatewaymonitormodel.MigrateDB(db)
+		gatewaymonitormodel.ApplyAllRoutes(db)
 		gatewaymonitormodel.StartAllMonitors(db)
 		r.Mount("/api/v1/gatewaymonitor", gatewaymonitorroutes.GatewayMonitorRouter(gatewaymonitormodel.New(db)))
 	}},
