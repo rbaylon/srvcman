@@ -8,6 +8,15 @@
 //	    Return-Status: 200 on Success
 //	                   500 on Error
 //
+//	  /api/v1/gatewaymonitor/applyroutes
+//	    Method: PUT
+//	    Headers: Authorization Bearer
+//	    Return: JSON {"applied": <n>, "failed": <n>} - re-installs the
+//	            route for every gatewaymonitor record (see
+//	            gatewaymonitormodel.ApplyAllRoutes); normally only run at
+//	            startup, exposed here for manually re-triggering it
+//	    Return-Status: 200 on Success
+//
 //	  /api/v1/gatewaymonitor/<gatewayMonitorId>
 //	    Method: GET|PUT|DELETE
 //	    Headers: Authorization Bearer
@@ -49,6 +58,10 @@ func GatewayMonitorRouter(db gatewaymonitormodel.Crud) chi.Router {
 			return
 		}
 		render.JSON(w, r, res)
+	})
+	r.Put("/applyroutes", func(w http.ResponseWriter, r *http.Request) {
+		applied, failed := gatewaymonitormodel.ApplyAllRoutes(dbconn)
+		render.JSON(w, r, map[string]int{"applied": applied, "failed": failed})
 	})
 	r.Get("/{gatewayMonitorId}", func(w http.ResponseWriter, r *http.Request) {
 		id, err := strconv.Atoi(chi.URLParam(r, "gatewayMonitorId"))

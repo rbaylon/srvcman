@@ -209,26 +209,34 @@ func StartAllMonitors(db *gorm.DB) {
 }
 
 // ApplyAllRoutes re-installs the route for every existing GatewayMonitor
-// row. OpenBSD's routing table lives in the kernel, not in a config file
-// that's re-read on boot the way pf.conf/dhcpd.conf/unbound.conf are - a
-// route added via Storage.Add only lasts until the box reboots, at which
-// point srvcman (and the routes it applied) starts fresh with nothing.
-// Call this once at startup, after MigrateDB, alongside StartAllMonitors,
-// so every route exists again before its monitor starts pinging it.
-// Re-adding a route that's already present (e.g. this process restarted
-// without a reboot) is expected to fail harmlessly - errors are logged,
-// not fatal, same as Storage.Add's own applyRoute call.
-func ApplyAllRoutes(db *gorm.DB) {
+// row and reports how many succeeded/failed. OpenBSD's routing table lives
+// in the kernel, not in a config file that's re-read on boot the way
+// pf.conf/dhcpd.conf/unbound.conf are - a route added via Storage.Add only
+// lasts until the box reboots, at which point srvcman (and the routes it
+// applied) starts fresh with nothing. This is called once at startup,
+// after MigrateDB, alongside StartAllMonitors (see moduleregistry.go), so
+// every route exists again before its monitor starts pinging it; it's also
+// exposed via PUT /api/v1/gatewaymonitor/applyroutes for manually
+// re-triggering it (e.g. after a route was flushed by hand, or arkgated
+// itself restarted). Re-adding a route that's already present (e.g. this
+// process restarted without a reboot) is expected to fail harmlessly -
+// individual failures are logged, not fatal, same as Storage.Add's own
+// applyRoute call.
+func ApplyAllRoutes(db *gorm.DB) (applied int, failed int) {
 	var gateways []GatewayMonitor
 	if err := db.Find(&gateways).Error; err != nil {
 		log.Println("gatewaymonitor: failed to load records for route restore:", err)
-		return
+		return 0, 0
 	}
 	for _, g := range gateways {
 		if err := applyRoute(g.Name, g.MonitorIp, g.Ip); err != nil {
 			log.Println("gatewaymonitor: failed to restore route for", g.Name, ":", err)
+			failed++
+			continue
 		}
+		applied++
 	}
+	return applied, failed
 }
 
 // monitorLoop checks every registered monitor immediately, then on every
