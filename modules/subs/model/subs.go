@@ -116,7 +116,12 @@ type Crud interface {
 
 // MigrateGatewayRequest is the request body for Storage.MigrateGateway -
 // bulk-reassigns up to Count active subs off OldGateway onto NewGateway,
-// e.g. to rebalance load off a WAN link before maintenance.
+// e.g. to rebalance load off a WAN link before maintenance. OldGateway and
+// NewGateway may both be "" - an empty Gateway is the existing "Default
+// gateway" convention (see the dashboard's gateway-distribution chart,
+// which already buckets Gateway == "" subs as "Default"), so this lets
+// callers migrate subs onto or off of the default route, not just between
+// two named gateways.
 type MigrateGatewayRequest struct {
 	OldGateway string `json:"old_gateway"`
 	NewGateway string `json:"new_gateway"`
@@ -125,6 +130,9 @@ type MigrateGatewayRequest struct {
 
 // Bind interface as required by go-chi/render
 func (a *MigrateGatewayRequest) Bind(r *http.Request) error {
+	// validate.IP accepts "" (see its doc comment) - that's relied on here
+	// deliberately, not incidentally, to allow the "Default gateway" case
+	// described above.
 	if err := validate.IP("old_gateway", a.OldGateway); err != nil {
 		return err
 	}
