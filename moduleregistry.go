@@ -16,6 +16,7 @@ import (
 	dhcpserverroutes "github.com/rbaylon/srvcman/modules/dhcpserver/routes"
 	dhcpmodel "github.com/rbaylon/srvcman/modules/dhcps/model"
 	dhcproutes "github.com/rbaylon/srvcman/modules/dhcps/routes"
+	diagnosticsroutes "github.com/rbaylon/srvcman/modules/diagnostics/routes"
 	fwmodel "github.com/rbaylon/srvcman/modules/firewall/model"
 	fwroutes "github.com/rbaylon/srvcman/modules/firewall/routes"
 	gatewaymonitormodel "github.com/rbaylon/srvcman/modules/gatewaymonitor/model"
@@ -126,6 +127,11 @@ var optionalModules = map[string]Module{
 	"dhcpserver": {"dhcpserver", func(r chi.Router, db *gorm.DB) {
 		dhcpservermodel.MigrateDB(db)
 		r.Mount("/api/v1/dhcpserver", dhcpserverroutes.DhcpServerRouter(dhcpservermodel.New(db)))
+	}},
+	// diagnostics has no model - nothing to migrate, it just triggers
+	// ping/traceroute and returns their output.
+	"diagnostics": {"diagnostics", func(r chi.Router, db *gorm.DB) {
+		r.Mount("/api/v1/diagnostics", diagnosticsroutes.DiagnosticsRouter(db))
 	}},
 	"unbounddns": {"unbounddns", func(r chi.Router, db *gorm.DB) {
 		unbounddnsmodel.MigrateDB(db)
