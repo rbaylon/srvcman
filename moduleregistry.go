@@ -109,6 +109,11 @@ var coreModules = []Module{
 		changemodel.MigrateDB(db)
 		r.Mount("/api/v1/changes", changeroutes.ChangeRouter(changemodel.New(db)))
 	}},
+	// diagnostics has no model - nothing to migrate, it just triggers
+	// ping/traceroute and returns their output.
+	{"diagnostics", func(r chi.Router, db *gorm.DB) {
+		r.Mount("/api/v1/diagnostics", diagnosticsroutes.DiagnosticsRouter(db))
+	}},
 }
 
 // optionalModules may be enabled by listing their name in the "modules" array
@@ -127,11 +132,6 @@ var optionalModules = map[string]Module{
 	"dhcpserver": {"dhcpserver", func(r chi.Router, db *gorm.DB) {
 		dhcpservermodel.MigrateDB(db)
 		r.Mount("/api/v1/dhcpserver", dhcpserverroutes.DhcpServerRouter(dhcpservermodel.New(db)))
-	}},
-	// diagnostics has no model - nothing to migrate, it just triggers
-	// ping/traceroute and returns their output.
-	"diagnostics": {"diagnostics", func(r chi.Router, db *gorm.DB) {
-		r.Mount("/api/v1/diagnostics", diagnosticsroutes.DiagnosticsRouter(db))
 	}},
 	"unbounddns": {"unbounddns", func(r chi.Router, db *gorm.DB) {
 		unbounddnsmodel.MigrateDB(db)
