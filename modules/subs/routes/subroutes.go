@@ -23,6 +23,17 @@
 //	    Return-Status: 200 on Success
 //	                   500 on Error
 //	                   400 on Bad request
+//
+//	  /api/v1/subs/migrategateway
+//	    Method: PUT
+//	    Headers: Authorization Bearer
+//	    Body: submodel.MigrateGatewayRequest {old_gateway, new_gateway, count}
+//	    Return: JSON {"migrated": <n>} - reassigns up to count active subs
+//	            off old_gateway onto new_gateway (see
+//	            submodel.Storage.MigrateGateway)
+//	    Return-Status: 200 on Success
+//	                   500 on Error
+//	                   400 on Bad request
 package subroutes
 
 import (
@@ -87,6 +98,19 @@ func SubRouter(db submodel.Crud) chi.Router {
 			return
 		}
 		render.Render(w, r, utils.ErrInvalidRequest(errupdate, fmt.Sprintf("Error updating record for sub  ID %s", chi.URLParam(r, "subId")), http.StatusBadRequest))
+	})
+	r.Put("/migrategateway", func(w http.ResponseWriter, r *http.Request) {
+		req := &submodel.MigrateGatewayRequest{}
+		if err := render.Bind(r, req); err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "Bind error", http.StatusBadRequest))
+			return
+		}
+		n, err := db.MigrateGateway(req.OldGateway, req.NewGateway, req.Count)
+		if err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "DB error", http.StatusInternalServerError))
+			return
+		}
+		render.JSON(w, r, map[string]int64{"migrated": n})
 	})
 	r.Get("/activate/{ip}/{status}", func(w http.ResponseWriter, r *http.Request) {
 		ip := chi.URLParam(r, "ip")

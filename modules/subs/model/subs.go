@@ -110,7 +110,28 @@ type Crud interface {
 	Delete(sub *Sub) error
 	GetByMac(mac string) (*Sub, error)
 	GetByMacPrefix(macprefix string) (*Sub, error)
+	MigrateGateway(oldGateway, newGateway string, count int) (int64, error)
 	GetDB() *gorm.DB
+}
+
+// MigrateGatewayRequest is the request body for Storage.MigrateGateway -
+// bulk-reassigns up to Count active subs off OldGateway onto NewGateway,
+// e.g. to rebalance load off a WAN link before maintenance.
+type MigrateGatewayRequest struct {
+	OldGateway string `json:"old_gateway"`
+	NewGateway string `json:"new_gateway"`
+	Count      int    `json:"count"`
+}
+
+// Bind interface as required by go-chi/render
+func (a *MigrateGatewayRequest) Bind(r *http.Request) error {
+	if err := validate.IP("old_gateway", a.OldGateway); err != nil {
+		return err
+	}
+	if err := validate.IP("new_gateway", a.NewGateway); err != nil {
+		return err
+	}
+	return validate.IntRange("count", a.Count, 1, 100000)
 }
 
 type Storage struct {
@@ -183,6 +204,33 @@ func (s *Storage) GetByMacPrefix(macprefix string) (*Sub, error) {
 		return &sub, nil
 	}
 	return nil, fmt.Errorf("Prefix empty")
+}
+
+// MigrateGateway reassigns up to count active subs whose Gateway is
+// oldGateway to newGateway - the gorm equivalent of:
+//
+//	UPDATE subs SET gateway = ?
+//	WHERE id IN (SELECT id FROM subs WHERE gateway = ? AND status = 'active' LIMIT ?)
+//
+// Done as a select-then-update rather than a single nested query so the
+// same code works identically on SQLite and Postgres (DB_TYPE). Returns
+// how many rows were actually updated.
+func (s *Storage) MigrateGateway(oldGateway, newGateway string, count int) (int64, error) {
+	var ids []uint
+	if err := s.DB.Model(&Sub{}).
+		Where("gateway = ? AND status = ?", oldGateway, "active").
+		Limit(count).
+		Pluck("id", &ids).Error; err != nil {
+		return 0, err
+	}
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	result := s.DB.Model(&Sub{}).Where("id IN ?", ids).Update("gateway", newGateway)
+	if result.Error != nil {
+		return 0, result.Error
+	}
+	return result.RowsAffected, nil
 }
 
 func (s *Storage) Update(sub *Sub) error {
