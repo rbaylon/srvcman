@@ -2,13 +2,17 @@
 package utils
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"regexp"
 	"time"
 
 	"github.com/go-chi/render"
+	"github.com/rbaylon/srvcman/database"
 	vouchermodel "github.com/rbaylon/srvcman/modules/vouchers/model"
 )
 
@@ -46,10 +50,43 @@ func CheckExpired(db vouchermodel.Crud) {
 	}
 }
 
-func GetUnixConn(socketpath string) net.Conn {
-	c, err := net.Dial("unix", socketpath)
+// GetArkConn opens a mutual-TLS connection to arkgated's network IPC
+// listener, replacing the old Unix-domain-socket dial now that srvcman and
+// arkgated can run on separate hosts. ARKGATED_TLS_CERT/ARKGATED_TLS_KEY
+// are srvcman's own client identity (verified by arkgated's ClientCAs);
+// ARKGATED_TLS_CA verifies arkgated's server cert in return. All three, plus
+// ARKGATED_ADDR (host:port), are expected to be provisioned by the
+// deployment's own PKI tooling - this only ever reads them.
+func GetArkConn() net.Conn {
+	addr := database.GetEnvVariable("ARKGATED_ADDR")
+	certfile := database.GetEnvVariable("ARKGATED_TLS_CERT")
+	keyfile := database.GetEnvVariable("ARKGATED_TLS_KEY")
+	cafile := database.GetEnvVariable("ARKGATED_TLS_CA")
+
+	cert, err := tls.LoadX509KeyPair(certfile, keyfile)
 	if err != nil {
-		log.Println("Dial error ", err)
+		log.Println("ArkConn: loading client cert/key error ", err)
+		return nil
+	}
+	caPEM, err := os.ReadFile(cafile)
+	if err != nil {
+		log.Println("ArkConn: reading server CA cert error ", err)
+		return nil
+	}
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM(caPEM) {
+		log.Println("ArkConn: no certificates found in ", cafile)
+		return nil
+	}
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		RootCAs:      pool,
+		MinVersion:   tls.VersionTLS12,
+	}
+	c, err := tls.Dial("tcp", addr, tlsConfig)
+	if err != nil {
+		log.Println("ArkConn: dial error ", err)
+		return nil
 	}
 	return c
 }

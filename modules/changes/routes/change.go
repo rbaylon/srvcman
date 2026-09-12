@@ -75,7 +75,6 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 				errors = append(errors, data)
 			}
 		}
-		usocket := database.GetEnvVariable("UNIX_SOCKET")
 		rundir := database.GetEnvVariable("RUN_DIR")
 		pfcmd := Acmd.GetPFcmds(rundir)
 		ifchange := false
@@ -106,7 +105,7 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 					ifcmd := Acmd.PrepareCmd("Interface restart: "+v, "sh", []string{"/etc/netstart", v})
 					cmds = append(cmds, *ifcmd)
 					for _, c := range cmds {
-						err = c.SendCmd(utils.GetUnixConn(usocket))
+						err = c.SendCmd(utils.GetArkConn())
 						if err != nil {
 							log.Println("Failed:" + c.Name)
 						}
@@ -120,19 +119,19 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 				if err == nil {
 					gwbackup := Acmd.PrepareCmd("Backup mygate", "cp", []string{"/etc/mygate",
 						"/etc/mygate." + strconv.FormatInt(nowunix, 10)})
-					err = gwbackup.SendCmd(utils.GetUnixConn(usocket))
+					err = gwbackup.SendCmd(utils.GetArkConn())
 					if err != nil {
 						log.Println("mygate backup failed")
 					}
 					time.Sleep(1 * time.Second)
 					tmptoetc := Acmd.PrepareCmd("/tmp/mygate to etc", "mv", []string{"/tmp/mygate", "/etc/"})
-					err = tmptoetc.SendCmd(utils.GetUnixConn(usocket))
+					err = tmptoetc.SendCmd(utils.GetArkConn())
 					if err != nil {
 						log.Println("mygate tmp to etc failed")
 					} else {
 						time.Sleep(1 * time.Second)
 						gwcmd := Acmd.PrepareCmd("Gateway restart", "sh", []string{"/etc/netstart"})
-						err = gwcmd.SendCmd(utils.GetUnixConn(usocket))
+						err = gwcmd.SendCmd(utils.GetArkConn())
 						if err != nil {
 							log.Println("Netstart failed!")
 						}
@@ -143,66 +142,66 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 			}
 		}
 		if changes["subs"] > 0 || changes["firewall"] > 0 || ifchange {
-			err := pfcmd["check"].SendCmd(utils.GetUnixConn(usocket))
+			err := pfcmd["check"].SendCmd(utils.GetArkConn())
 			if err != nil {
 				exeerror := Changemodel.Change{}
 				exeerror.Module = "subs"
 				exeerror.Data = "error in " + rundir + "/pf.conf"
 				errors = append(errors, exeerror)
 			}
-			pfcmd["backup"].SendCmd(utils.GetUnixConn(usocket))
-			pfcmd["move"].SendCmd(utils.GetUnixConn(usocket))
-			err = pfcmd["apply"].SendCmd(utils.GetUnixConn(usocket))
+			pfcmd["backup"].SendCmd(utils.GetArkConn())
+			pfcmd["move"].SendCmd(utils.GetArkConn())
+			err = pfcmd["apply"].SendCmd(utils.GetArkConn())
 			if err != nil {
 				exeerror := Changemodel.Change{}
 				exeerror.Module = "subs"
 				exeerror.Data = "error applying " + rundir + "/pf.conf"
 				errors = append(errors, exeerror)
-				pfcmd["revert"].SendCmd(utils.GetUnixConn(usocket))
+				pfcmd["revert"].SendCmd(utils.GetArkConn())
 			}
 		}
 		if changes["dhcpserver"] > 0 {
 			dhcpconf := rundir + "dhcpd.conf"
 			dhcpcmd := Acmd.GetServiceCmds("dhcpd", "/usr/sbin/dhcpd", "/etc/", dhcpconf)
 			dhcprc := Acmd.GetRcCmds("dhcpd")
-			err := dhcpcmd["check"].SendCmd(utils.GetUnixConn(usocket))
+			err := dhcpcmd["check"].SendCmd(utils.GetArkConn())
 			if err != nil {
 				exeerror := Changemodel.Change{}
 				exeerror.Module = "dhcpserver"
 				exeerror.Data = "error in " + dhcpconf
 				errors = append(errors, exeerror)
 			}
-			dhcpcmd["backup"].SendCmd(utils.GetUnixConn(usocket))
-			dhcpcmd["stage"].SendCmd(utils.GetUnixConn(usocket))
-			err = dhcprc["restart"].SendCmd(utils.GetUnixConn(usocket))
+			dhcpcmd["backup"].SendCmd(utils.GetArkConn())
+			dhcpcmd["stage"].SendCmd(utils.GetArkConn())
+			err = dhcprc["restart"].SendCmd(utils.GetArkConn())
 			if err != nil {
 				exeerror := Changemodel.Change{}
 				exeerror.Module = "dhcpserver"
 				exeerror.Data = "error applying " + dhcpconf
 				errors = append(errors, exeerror)
-				dhcpcmd["revert"].SendCmd(utils.GetUnixConn(usocket))
+				dhcpcmd["revert"].SendCmd(utils.GetArkConn())
 			}
 		}
 		if changes["unbounddns"] > 0 {
 			unboundconf := rundir + "unbound.conf"
 			unboundcmd := Acmd.GetServiceCmds("unbound", "/usr/sbin/unbound-checkconf", "/var/unbound/etc/", unboundconf)
 			unboundrc := Acmd.GetRcCmds("unbound")
-			err := unboundcmd["check_unbound"].SendCmd(utils.GetUnixConn(usocket))
+			err := unboundcmd["check_unbound"].SendCmd(utils.GetArkConn())
 			if err != nil {
 				exeerror := Changemodel.Change{}
 				exeerror.Module = "unbounddns"
 				exeerror.Data = "error in " + unboundconf
 				errors = append(errors, exeerror)
 			}
-			unboundcmd["backup"].SendCmd(utils.GetUnixConn(usocket))
-			unboundcmd["stage"].SendCmd(utils.GetUnixConn(usocket))
-			err = unboundrc["restart"].SendCmd(utils.GetUnixConn(usocket))
+			unboundcmd["backup"].SendCmd(utils.GetArkConn())
+			unboundcmd["stage"].SendCmd(utils.GetArkConn())
+			err = unboundrc["restart"].SendCmd(utils.GetArkConn())
 			if err != nil {
 				exeerror := Changemodel.Change{}
 				exeerror.Module = "unbounddns"
 				exeerror.Data = "error applying " + unboundconf
 				errors = append(errors, exeerror)
-				unboundcmd["revert"].SendCmd(utils.GetUnixConn(usocket))
+				unboundcmd["revert"].SendCmd(utils.GetArkConn())
 			}
 		}
 		if changes["pppoes"] > 0 {
@@ -211,18 +210,18 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 			// or unbound-checkconf), so there's no "check" step here.
 			npppdcmd := Acmd.GetServiceCmds("npppd", "", "/etc/npppd/", npppdconf)
 			npppdrc := Acmd.GetRcCmds("npppd")
-			npppdcmd["backup"].SendCmd(utils.GetUnixConn(usocket))
-			npppdcmd["stage"].SendCmd(utils.GetUnixConn(usocket))
-			err := npppdrc["restart"].SendCmd(utils.GetUnixConn(usocket))
+			npppdcmd["backup"].SendCmd(utils.GetArkConn())
+			npppdcmd["stage"].SendCmd(utils.GetArkConn())
+			err := npppdrc["restart"].SendCmd(utils.GetArkConn())
 			if err != nil {
 				exeerror := Changemodel.Change{}
 				exeerror.Module = "pppoes"
 				exeerror.Data = "error applying " + npppdconf
 				errors = append(errors, exeerror)
-				npppdcmd["revert"].SendCmd(utils.GetUnixConn(usocket))
+				npppdcmd["revert"].SendCmd(utils.GetArkConn())
 			}
 		}
-		//utils.GetUnixConn(usocket)
+		//utils.GetArkConn()
 		render.JSON(w, r, errors)
 	})
 	r.Get("/pending", func(w http.ResponseWriter, r *http.Request) {

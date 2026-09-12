@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	Acmd "github.com/rbaylon/arkgatecmd"
-	"github.com/rbaylon/srvcman/database"
 	"github.com/rbaylon/srvcman/utils"
 )
 
@@ -13,14 +12,13 @@ import (
 // own process doesn't have.
 const routeBin = "/sbin/route"
 
-// sendArkCmd hands a command to arkgated over its Unix socket for
+// sendArkCmd hands a command to arkgated over its mTLS IPC connection for
 // privileged execution - the same mechanism gatewaymonitormodel and
 // modules/changes use to run route(8)/pfctl/mv as root. srvcman itself
 // never execs route(8) directly.
 func sendArkCmd(name, binpath string, opts []string) error {
-	usocket := database.GetEnvVariable("UNIX_SOCKET")
 	cmd := Acmd.PrepareCmd(name, binpath, opts)
-	return cmd.SendCmd(utils.GetUnixConn(usocket))
+	return cmd.SendCmd(utils.GetArkConn())
 }
 
 // destFlag returns the route(8) destination-type flag for routeType

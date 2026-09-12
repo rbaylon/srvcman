@@ -9,7 +9,6 @@ import (
 	"time"
 
 	Acmd "github.com/rbaylon/arkgatecmd"
-	"github.com/rbaylon/srvcman/database"
 	"github.com/rbaylon/srvcman/utils"
 	"gorm.io/gorm"
 )
@@ -306,13 +305,12 @@ func monitorLoop(ctx context.Context, db *gorm.DB) {
 // own process doesn't have.
 const routeBin = "/sbin/route"
 
-// sendArkCmd hands a command to arkgated over its Unix socket for
+// sendArkCmd hands a command to arkgated over its mTLS IPC connection for
 // privileged execution - the same mechanism modules/changes uses to run
 // pfctl/mv as root. srvcman itself never execs route(8) directly.
 func sendArkCmd(name, binpath string, opts []string) error {
-	usocket := database.GetEnvVariable("UNIX_SOCKET")
 	cmd := Acmd.PrepareCmd(name, binpath, opts)
-	return cmd.SendCmd(utils.GetUnixConn(usocket))
+	return cmd.SendCmd(utils.GetArkConn())
 }
 
 // applyRoute installs a labeled OpenBSD host route so traffic to monitorIP
