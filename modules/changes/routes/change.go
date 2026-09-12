@@ -110,7 +110,7 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 			}
 		}
 		if changes["dhcpserver"] > 0 {
-			dhcpconf := rundir + "dhcpd.conf"
+			dhcpconf := "/tmp/dhcpd.conf"
 			dhcpcmd := Acmd.GetServiceCmds("dhcpd", "/usr/sbin/dhcpd", "/etc/", dhcpconf)
 			dhcprc := Acmd.GetRcCmds("dhcpd")
 			err := dhcpcmd["check"].SendCmd(utils.GetArkConn())
@@ -132,7 +132,7 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 			}
 		}
 		if changes["unbounddns"] > 0 {
-			unboundconf := rundir + "unbound.conf"
+			unboundconf := "/tmp/unbound.conf"
 			unboundcmd := Acmd.GetServiceCmds("unbound", "/usr/sbin/unbound-checkconf", "/var/unbound/etc/", unboundconf)
 			unboundrc := Acmd.GetRcCmds("unbound")
 			err := unboundcmd["check_unbound"].SendCmd(utils.GetArkConn())
@@ -154,7 +154,7 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 			}
 		}
 		if changes["pppoes"] > 0 {
-			npppdconf := rundir + "npppd.conf"
+			npppdconf := "/tmp/npppd.conf"
 			// npppd has no built-in config-validate mode (unlike pfctl -nf
 			// or unbound-checkconf), so there's no "check" step here.
 			npppdcmd := Acmd.GetServiceCmds("npppd", "", "/etc/npppd/", npppdconf)
