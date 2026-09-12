@@ -34,7 +34,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
 	Acmd "github.com/rbaylon/arkgatecmd"
-	"github.com/rbaylon/srvcman/database"
 	Changemodel "github.com/rbaylon/srvcman/modules/changes/model"
 	"github.com/rbaylon/srvcman/modules/security"
 	"github.com/rbaylon/srvcman/utils"
@@ -72,8 +71,7 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 				errors = append(errors, data)
 			}
 		}
-		rundir := database.GetEnvVariable("RUN_DIR")
-		pfcmd := Acmd.GetPFcmds(rundir)
+		pfcmd := Acmd.GetPFcmds("/tmp/")
 		ifchange := false
 		if changes["pfifaces"] > 0 {
 			// arkgated generates its own hostname.<if>/mygate files (from
@@ -95,7 +93,7 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 			if err != nil {
 				exeerror := Changemodel.Change{}
 				exeerror.Module = "subs"
-				exeerror.Data = "error in " + rundir + "/pf.conf"
+				exeerror.Data = "error in /tmp/pf.conf"
 				errors = append(errors, exeerror)
 			}
 			pfcmd["backup"].SendCmd(utils.GetArkConn())
@@ -104,7 +102,7 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 			if err != nil {
 				exeerror := Changemodel.Change{}
 				exeerror.Module = "subs"
-				exeerror.Data = "error applying " + rundir + "/pf.conf"
+				exeerror.Data = "error applying /tmp/pf.conf"
 				errors = append(errors, exeerror)
 				pfcmd["revert"].SendCmd(utils.GetArkConn())
 			}
