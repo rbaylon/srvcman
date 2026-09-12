@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os/exec"
 	"sync"
 	"time"
 
@@ -129,17 +128,36 @@ func clearHistory(id uint) {
 }
 
 // pingOnce reports whether ip answered a single ping within pingTimeout.
-// It's derived from the monitor's own ctx so cancelling that ctx (StopMonitor
-// / StopAllMonitors) kills an in-flight ping process immediately instead of
-// leaving it to run out its own timeout.
+// The ping itself runs on arkgated (see sendArkCmd), not locally - srvcman
+// may not run on the same host as the gateway being monitored anymore, and
+// only arkgated (on the actual OpenBSD box) can meaningfully ping from that
+// vantage point. The connection is deadlined to pingTimeout+1s so a
+// slow/unresponsive arkgated can't hang this indefinitely, and a watcher
+// goroutine force-closes it if ctx is cancelled first (StopMonitor /
+// StopAllMonitors), same as the old exec.CommandContext did for a local
+// process.
 func pingOnce(ctx context.Context, ip string) bool {
 	if ip == "" {
 		return false
 	}
-	pctx, cancel := context.WithTimeout(ctx, pingTimeout+time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(pctx, "ping", "-c", "1", "-w", fmt.Sprintf("%d", int(pingTimeout.Seconds())), ip)
-	return cmd.Run() == nil
+	conn := utils.GetArkConn()
+	if conn == nil {
+		return false
+	}
+	conn.SetDeadline(time.Now().Add(pingTimeout + time.Second))
+
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		select {
+		case <-ctx.Done():
+			conn.Close()
+		case <-done:
+		}
+	}()
+
+	cmd := Acmd.PrepareCmd("HealthPing", "/sbin/ping", []string{"-c", "1", "-w", fmt.Sprintf("%d", int(pingTimeout.Seconds())), ip})
+	return cmd.SendCmd(conn) == nil
 }
 
 // StartMonitor registers id for health-checking (a no-op if id is already

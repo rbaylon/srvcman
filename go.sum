@@ -49,6 +49,8 @@ github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZb
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/rbaylon/arkgatecmd v1.1.5 h1:s5w0xn21pttHLhkEnuJzhY5YBNrLxybgLlLmqkGPDNE=
 github.com/rbaylon/arkgatecmd v1.1.5/go.mod h1:2+cGMUWHrOzsCoFVGwqrJmgB1qgoCmm+87ZAdMqlT+Y=
+github.com/rbaylon/arkgatecmd v1.1.6 h1:AD7HCruv+y6uldSi05pCQ49j7ZepgVCSGWhyOqIEcvM=
+github.com/rbaylon/arkgatecmd v1.1.6/go.mod h1:2+cGMUWHrOzsCoFVGwqrJmgB1qgoCmm+87ZAdMqlT+Y=
 github.com/segmentio/asm v1.2.0 h1:9BQrFxC+YOHJlTlHGkTrFWf59nbL3XnCoFLTwDCI7ys=
 github.com/segmentio/asm v1.2.0/go.mod h1:BqMnlJP91P8d+4ibuonYZw9mfnzI9HfxselHZr5aAcs=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=

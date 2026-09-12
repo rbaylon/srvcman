@@ -7,15 +7,35 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 
+	Acmd "github.com/rbaylon/arkgatecmd"
 	vlanmodel "github.com/rbaylon/srvcman/modules/vlans/model"
 	"github.com/rbaylon/srvcman/utils"
 	"github.com/rbaylon/srvcman/utils/validate"
 	"gorm.io/gorm"
 )
+
+// arkCmdTimeout bounds how long ListDevices/GetTrafficStats wait for
+// arkgated to run ifconfig/netstat and reply.
+const arkCmdTimeout = 15 * time.Second
+
+// runViaArk dispatches a read-only introspection command (ifconfig,
+// netstat) to arkgated and returns its output. srvcman may not run on the
+// same host as the gateway being inspected anymore, so these can no longer
+// be exec'd locally - only arkgated (on the actual OpenBSD box) can report
+// on its own interfaces/traffic.
+func runViaArk(name, binpath string, opts []string) (string, error) {
+	conn := utils.GetArkConn()
+	if conn == nil {
+		return "", fmt.Errorf("arkgated unreachable")
+	}
+	conn.SetDeadline(time.Now().Add(arkCmdTimeout))
+	cmd := Acmd.PrepareCmd(name, binpath, opts)
+	return cmd.SendCmdOutput(conn)
+}
 
 type Pfiface struct {
 	gorm.Model
@@ -243,11 +263,11 @@ func isPseudoDevice(name string) bool {
 // listInterfaceNames runs ifconfig on this host and extracts the interface
 // names present, e.g. "em0: flags=8843<UP,..." -> "em0".
 func listInterfaceNames() ([]string, error) {
-	out, err := exec.Command("sh", "-c", "ifconfig -a | grep -Eo '^[a-zA-Z0-9]+:' | tr -d ':'").Output()
+	out, err := runViaArk("ListInterfaces", "/bin/sh", []string{"-c", "ifconfig -a | grep -Eo '^[a-zA-Z0-9]+:' | tr -d ':'"})
 	if err != nil {
 		return nil, err
 	}
-	return strings.Fields(string(out)), nil
+	return strings.Fields(out), nil
 }
 
 // ListDevices returns the physical network interfaces present on this host,
@@ -297,13 +317,13 @@ func (s *Storage) ListDevices() ([]string, error) {
 // Ibytes Opkts Oerrs Obytes Coll) are always present, so they're indexed
 // from the end of the row instead.
 func (s *Storage) GetTrafficStats() ([]TrafficStat, error) {
-	out, err := exec.Command("netstat", "-ibn").Output()
+	out, err := runViaArk("Netstat", "/usr/bin/netstat", []string{"-ibn"})
 	if err != nil {
 		return nil, err
 	}
 	stats := []TrafficStat{}
 	seen := map[string]bool{}
-	lines := strings.Split(string(out), "\n")
+	lines := strings.Split(out, "\n")
 	for i, line := range lines {
 		//fmt.Println(line)
 		if i == 0 {
