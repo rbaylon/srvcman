@@ -51,7 +51,6 @@ package pfifaceroutes
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 
@@ -128,10 +127,6 @@ func PfifaceRouter(db pfifacemodel.Crud) chi.Router {
 		pfiface.ID = uint(id)
 		err = db.Update(&pfiface)
 		if err == nil {
-			err = db.GenConF(&pfiface)
-			if err != nil {
-				log.Println("ERROR generating interface for ", pfiface.Device)
-			}
 			render.JSON(w, r, pfiface)
 			return
 		}
@@ -145,10 +140,6 @@ func PfifaceRouter(db pfifacemodel.Crud) chi.Router {
 		}
 		err := db.Add(&pfiface)
 		if err == nil {
-			err = db.GenConF(&pfiface)
-			if err != nil {
-				log.Println("ERROR generating interface for ", pfiface.Device)
-			}
 			render.JSON(w, r, pfiface)
 			return
 		}

@@ -2,11 +2,8 @@ package unbounddnsmodel
 
 import (
 	"fmt"
-	"log"
-	"os"
 	"strings"
 
-	"github.com/rbaylon/srvcman/database"
 	"gorm.io/gorm"
 )
 
@@ -73,12 +70,12 @@ func (d *UnboundDns) ToConf() string {
 }
 
 // GenerateConf renders every UnboundDns row into one unbound.conf and
-// stages it at RUN_DIR/unbound.conf - the same staging pattern
-// dhcpservermodel.GenerateConf uses, which modules/changes' PUT
-// /changes/pending apply flow backs up/stages/restarts unbound from (into
-// /var/unbound/etc/unbound.conf). The rendered text is always returned,
-// even if the write fails, so callers (the API's /conf view) get a result
-// reflecting the current DB state regardless of whether staging succeeded.
+// returns it as text - used by the API's /conf view (UI preview) and by
+// arkgated (config/pf.DnsCreate), which fetches this same text over HTTP
+// and stages it into its own rundir. This no longer writes the file
+// locally: srvcman and arkgated may run on separate hosts, so a file
+// written to srvcman's own disk was never visible to arkgated's later
+// mv/backup of that same path.
 func GenerateConf(db *gorm.DB) (string, error) {
 	var servers []UnboundDns
 	if err := db.Find(&servers).Error; err != nil {
@@ -90,11 +87,5 @@ func GenerateConf(db *gorm.DB) (string, error) {
 		b.WriteString(s.ToConf())
 		b.WriteString("\n")
 	}
-	conf := b.String()
-
-	rundir := database.GetEnvVariable("RUN_DIR")
-	if err := os.WriteFile(rundir+"unbound.conf", []byte(conf), 0640); err != nil {
-		log.Println("unbounddns: failed to stage unbound.conf:", err)
-	}
-	return conf, nil
+	return b.String(), nil
 }

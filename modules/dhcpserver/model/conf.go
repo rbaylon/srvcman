@@ -2,11 +2,8 @@ package dhcpservermodel
 
 import (
 	"fmt"
-	"log"
-	"os"
 	"strings"
 
-	"github.com/rbaylon/srvcman/database"
 	"gorm.io/gorm"
 )
 
@@ -50,12 +47,12 @@ func (d *DhcpServer) ToConf() string {
 	return b.String()
 }
 
-// GenerateConf renders every DhcpServer row into one dhcpd.conf and stages
-// it at RUN_DIR/dhcpd.conf - the same path modules/changes' PUT
-// /changes/pending apply flow backs up/stages/reloads dhcpd from. The
-// rendered text is always returned, even if the write fails, so callers
-// (the API's /conf view) get a result reflecting the current DB state
-// regardless of whether staging succeeded.
+// GenerateConf renders every DhcpServer row into one dhcpd.conf and returns
+// it as text - used by the API's /conf view (UI preview) and by arkgated
+// (config/pf.DhcpCreate), which fetches this same text over HTTP and stages
+// it into its own rundir. This no longer writes the file locally: srvcman
+// and arkgated may run on separate hosts, so a file written to srvcman's own
+// disk was never visible to arkgated's later mv/backup of that same path.
 func GenerateConf(db *gorm.DB) (string, error) {
 	var servers []DhcpServer
 	if err := db.Find(&servers).Error; err != nil {
@@ -67,11 +64,5 @@ func GenerateConf(db *gorm.DB) (string, error) {
 		b.WriteString(s.ToConf())
 		b.WriteString("\n")
 	}
-	conf := b.String()
-
-	rundir := database.GetEnvVariable("RUN_DIR")
-	if err := os.WriteFile(rundir+"dhcpd.conf", []byte(conf), 0640); err != nil {
-		log.Println("dhcpserver: failed to stage dhcpd.conf:", err)
-	}
-	return conf, nil
+	return b.String(), nil
 }

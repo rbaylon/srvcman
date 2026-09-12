@@ -29,10 +29,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"strconv"
-	"strings"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
@@ -79,66 +76,18 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 		pfcmd := Acmd.GetPFcmds(rundir)
 		ifchange := false
 		if changes["pfifaces"] > 0 {
-			files, err := os.ReadDir("/tmp")
-			if err != nil {
-				log.Fatal(err)
-			}
-			foundif := false
-			ifs := []string{}
-			for _, file := range files {
-				if strings.Contains(file.Name(), "hostname.") {
-					foundif = true
-					iface := strings.Split(file.Name(), ".")
-					ifs = append(ifs, iface[1])
-				}
-			}
-			nowunix := time.Time.Unix(time.Time{})
-			if foundif {
-				ifchange = true
-				cmds := []Acmd.Arkcmd{}
-				for _, v := range ifs {
-					mvcmd := Acmd.PrepareCmd("Backup Interface: "+v, "cp", []string{"/etc/hostname." + v, "/etc/hostname." +
-						v + "." + strconv.FormatInt(nowunix, 10)})
-					cmds = append(cmds, *mvcmd)
-					etcif := Acmd.PrepareCmd("Move iface to etc: "+v, "mv", []string{"/tmp/hostname." + v, "/etc/"})
-					cmds = append(cmds, *etcif)
-					ifcmd := Acmd.PrepareCmd("Interface restart: "+v, "sh", []string{"/etc/netstart", v})
-					cmds = append(cmds, *ifcmd)
-					for _, c := range cmds {
-						err = c.SendCmd(utils.GetArkConn())
-						if err != nil {
-							log.Println("Failed:" + c.Name)
-						}
-						log.Println("Success: ", c.Name)
-						time.Sleep(2 * time.Second)
-					}
-					clear(cmds)
-					cmds = cmds[:0]
-				}
-				_, err := os.Stat("/tmp/mygate")
-				if err == nil {
-					gwbackup := Acmd.PrepareCmd("Backup mygate", "cp", []string{"/etc/mygate",
-						"/etc/mygate." + strconv.FormatInt(nowunix, 10)})
-					err = gwbackup.SendCmd(utils.GetArkConn())
-					if err != nil {
-						log.Println("mygate backup failed")
-					}
-					time.Sleep(1 * time.Second)
-					tmptoetc := Acmd.PrepareCmd("/tmp/mygate to etc", "mv", []string{"/tmp/mygate", "/etc/"})
-					err = tmptoetc.SendCmd(utils.GetArkConn())
-					if err != nil {
-						log.Println("mygate tmp to etc failed")
-					} else {
-						time.Sleep(1 * time.Second)
-						gwcmd := Acmd.PrepareCmd("Gateway restart", "sh", []string{"/etc/netstart"})
-						err = gwcmd.SendCmd(utils.GetArkConn())
-						if err != nil {
-							log.Println("Netstart failed!")
-						}
-						log.Println("Networking restarted")
-						time.Sleep(3 * time.Second)
-					}
-				}
+			// arkgated generates its own hostname.<if>/mygate files (from
+			// live data it fetches from this API, see
+			// config/pf.ConfigCreate) and does the actual backup/cp/mv into
+			// /etc plus the netstart itself - it no longer depends on
+			// srvcman having written those files locally first, since
+			// srvcman and arkgated may run on separate hosts. Only files
+			// whose content actually changed get promoted/restarted.
+			ifchange = true
+			applycmd := Acmd.PrepareCmd("ApplyIfaces", "true", []string{})
+			if err := applycmd.SendCmd(utils.GetArkConn()); err != nil {
+				log.Println("Failed to apply interface changes:", err)
+				ifchange = false
 			}
 		}
 		if changes["subs"] > 0 || changes["firewall"] > 0 || ifchange {
