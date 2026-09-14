@@ -17,6 +17,17 @@
 //	            startup, exposed here for manually re-triggering it
 //	    Return-Status: 200 on Success
 //
+//	  /api/v1/gatewaymonitor/activeroutes
+//	    Method: GET
+//	    Headers: Authorization Bearer
+//	    Return: JSON {"output": <text>, "error": <text, omitted if none>} -
+//	            the output of `netstat -rn | grep UGHS` on arkgated (see
+//	            gatewaymonitormodel.GetActiveRoutes). Always 200; a failure
+//	            reaching arkgated is reported in "error" rather than as an
+//	            HTTP error status, since this is supplementary info for the
+//	            gatewaymonitor list page.
+//	    Return-Status: 200 always
+//
 //	  /api/v1/gatewaymonitor/<gatewayMonitorId>
 //	    Method: GET|PUT|DELETE
 //	    Headers: Authorization Bearer
@@ -62,6 +73,17 @@ func GatewayMonitorRouter(db gatewaymonitormodel.Crud) chi.Router {
 	r.Put("/applyroutes", func(w http.ResponseWriter, r *http.Request) {
 		applied, failed := gatewaymonitormodel.ApplyAllRoutes(dbconn)
 		render.JSON(w, r, map[string]int{"applied": applied, "failed": failed})
+	})
+	r.Get("/activeroutes", func(w http.ResponseWriter, r *http.Request) {
+		out, err := gatewaymonitormodel.GetActiveRoutes()
+		resp := struct {
+			Output string `json:"output"`
+			Error  string `json:"error,omitempty"`
+		}{Output: out}
+		if err != nil {
+			resp.Error = err.Error()
+		}
+		render.JSON(w, r, resp)
 	})
 	r.Get("/{gatewayMonitorId}", func(w http.ResponseWriter, r *http.Request) {
 		id, err := strconv.Atoi(chi.URLParam(r, "gatewayMonitorId"))

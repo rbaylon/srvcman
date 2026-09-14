@@ -318,6 +318,27 @@ func monitorLoop(ctx context.Context, db *gorm.DB) {
 	}
 }
 
+// activeRoutesCmdTimeout bounds how long GetActiveRoutes waits for arkgated
+// to run netstat and reply.
+const activeRoutesCmdTimeout = 15 * time.Second
+
+// GetActiveRoutes returns the OpenBSD routing table filtered to UGHS routes
+// (Up, Gateway, Host, Static) - the host routes Storage.Add/applyRoute
+// install for each GatewayMonitor record - via `netstat -rn | grep UGHS`
+// run on arkgated. srvcman may not run on the same host as the gateway
+// being monitored anymore, so this is dispatched to arkgated the same way
+// as every other read in this file (see pingOnce/sendArkCmd) rather than
+// exec'd locally.
+func GetActiveRoutes() (string, error) {
+	conn := utils.GetArkConn()
+	if conn == nil {
+		return "", fmt.Errorf("arkgated unreachable")
+	}
+	conn.SetDeadline(time.Now().Add(activeRoutesCmdTimeout))
+	cmd := Acmd.PrepareCmd("ActiveRoutes", "/bin/sh", []string{"-c", "netstat -rn | grep UGHS"})
+	return cmd.SendCmdOutput(conn)
+}
+
 // routeBin is the OpenBSD route(8) binary, invoked via arkgated (see
 // sendArkCmd) since modifying the routing table needs privileges srvcman's
 // own process doesn't have.
