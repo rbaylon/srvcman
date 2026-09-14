@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"gorm.io/gorm"
 
+	captiveportalroutes "github.com/rbaylon/srvcman/modules/captiveportal/routes"
 	changemodel "github.com/rbaylon/srvcman/modules/changes/model"
 	changeroutes "github.com/rbaylon/srvcman/modules/changes/routes"
 	collectionmodel "github.com/rbaylon/srvcman/modules/collections/model"
@@ -170,6 +171,12 @@ var optionalModules = map[string]Module{
 	"pflow": {"pflow", func(r chi.Router, db *gorm.DB) {
 		pflowmodel.MigrateDB(db)
 		r.Mount("/api/v1/pflow", pflowroutes.PflowRouter(pflowmodel.New(db)))
+	}},
+	// captiveportal has no model - like diagnostics, there's nothing to
+	// migrate. It only asks arkgated to rcctl start/stop/restart/check the
+	// separate subsportal app's "captiveportal" rc.d service.
+	"captiveportal": {"captiveportal", func(r chi.Router, db *gorm.DB) {
+		r.Mount("/api/v1/captiveportal", captiveportalroutes.CaptivePortalRouter(db))
 	}},
 }
 

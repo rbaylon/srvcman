@@ -9,7 +9,7 @@ require (
 	github.com/go-chi/render v1.0.3
 	github.com/golang-jwt/jwt v3.2.2+incompatible
 	github.com/joho/godotenv v1.5.1
-	github.com/rbaylon/arkgatecmd v1.1.6
+	github.com/rbaylon/arkgatecmd v1.1.7
 	golang.org/x/crypto v0.31.0
 	gorm.io/driver/postgres v1.6.0
 	gorm.io/driver/sqlite v1.6.0
