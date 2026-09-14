@@ -96,7 +96,11 @@ func UserRouter(db usermodel.Crud) chi.Router {
 			render.Render(w, r, utils.ErrInvalidRequest(err, "Bind error", http.StatusBadRequest))
 			return
 		}
-		olduser, _ := db.GetById(uint(id))
+		olduser, err := db.GetById(uint(id))
+		if err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, fmt.Sprintf("Error finding record for user ID %s", chi.URLParam(r, "userId")), http.StatusBadRequest))
+			return
+		}
 		db.RemoveGroups(olduser)
 		user.ID = uint(id)
 		err = db.Update(&user)

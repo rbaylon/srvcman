@@ -94,7 +94,11 @@ func PolicyRouter(db policymodel.Crud) chi.Router {
 			render.Render(w, r, utils.ErrInvalidRequest(err, "Bind error", http.StatusBadRequest))
 			return
 		}
-		oldpolicy, _ := db.GetById(uint(id))
+		oldpolicy, err := db.GetById(uint(id))
+		if err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, fmt.Sprintf("Error finding record for policy ID %s", chi.URLParam(r, "policyId")), http.StatusBadRequest))
+			return
+		}
 		db.RemoveGroups(oldpolicy)
 		policy.ID = uint(id)
 		err = db.Update(&policy)

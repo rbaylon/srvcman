@@ -149,10 +149,19 @@ func validateToken(tokenString string, r *http.Request, db *gorm.DB, module stri
 			}
 			return nil
 		}
+		// userdata/poldata errors (a DB hiccup, or a stale JWT for a
+		// since-deleted user) used to be silently ignored here, and
+		// userdata.Groups below was dereferenced unconditionally -
+		// nil-pointer panic on every non-admin request while userdb is
+		// erroring. Skip the loop instead so deny stays true and falls
+		// through to the ordinary "Access denied" handling below.
 		userdb := usermodel.New(db)
-		userdata, _ := userdb.GetByUsername(username)
+		userdata, userErr := userdb.GetByUsername(username)
 		poldb := policymodel.New(db)
-		poldata, _ := poldb.GetByType(module)
+		poldata, polErr := poldb.GetByType(module)
+		if userErr != nil || polErr != nil {
+			poldata = nil
+		}
 		for _, p := range poldata {
 			for _, pg := range p.Groups {
 				for _, ug := range userdata.Groups {
