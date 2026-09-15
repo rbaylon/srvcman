@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"gorm.io/gorm"
 
+	billportalroutes "github.com/rbaylon/srvcman/modules/billportal/routes"
 	captiveportalroutes "github.com/rbaylon/srvcman/modules/captiveportal/routes"
 	changemodel "github.com/rbaylon/srvcman/modules/changes/model"
 	changeroutes "github.com/rbaylon/srvcman/modules/changes/routes"
@@ -177,6 +178,11 @@ var optionalModules = map[string]Module{
 	// separate subsportal app's "captiveportal" rc.d service.
 	"captiveportal": {"captiveportal", func(r chi.Router, db *gorm.DB) {
 		r.Mount("/api/v1/captiveportal", captiveportalroutes.CaptivePortalRouter(db))
+	}},
+	// billportal is the same shape as captiveportal, for the separate
+	// billportal app's "billportal" rc.d service.
+	"billportal": {"billportal", func(r chi.Router, db *gorm.DB) {
+		r.Mount("/api/v1/billportal", billportalroutes.BillPortalRouter(db))
 	}},
 }
 
