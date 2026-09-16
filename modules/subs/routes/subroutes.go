@@ -23,6 +23,17 @@
 //	    Return-Status: 200 on Success
 //	                   500 on Error
 //	                   400 on Bad request
+//
+//	  /api/v1/subs/migrategateway
+//	    Method: PUT
+//	    Headers: Authorization Bearer
+//	    Body: submodel.MigrateGatewayRequest {old_gateway, new_gateway, count}
+//	    Return: JSON {"migrated": <n>} - reassigns up to count active subs
+//	            off old_gateway onto new_gateway (see
+//	            submodel.Storage.MigrateGateway)
+//	    Return-Status: 200 on Success
+//	                   500 on Error
+//	                   400 on Bad request
 package subroutes
 
 import (
@@ -34,6 +45,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/jwtauth/v5"
 	"github.com/go-chi/render"
+	collectionmodel "github.com/rbaylon/srvcman/modules/collections/model"
 	runtimemodel "github.com/rbaylon/srvcman/modules/runtimes/model"
 	"github.com/rbaylon/srvcman/modules/security"
 	submodel "github.com/rbaylon/srvcman/modules/subs/model"
@@ -82,19 +94,23 @@ func SubRouter(db submodel.Crud) chi.Router {
 		sub.ID = uint(id)
 		errupdate := db.Update(sub)
 		if errupdate == nil {
-			dbconn := db.GetDB()
-			rtdb := runtimemodel.New(dbconn)
-			rt := &runtimemodel.Runtime{}
-			rt.Action = "updatepf"
-			rt.Status = "active"
-			err := rtdb.Add(rt)
-			if err != nil {
-				log.Println("update pf failed")
-			}
 			render.JSON(w, r, sub)
 			return
 		}
 		render.Render(w, r, utils.ErrInvalidRequest(errupdate, fmt.Sprintf("Error updating record for sub  ID %s", chi.URLParam(r, "subId")), http.StatusBadRequest))
+	})
+	r.Put("/migrategateway", func(w http.ResponseWriter, r *http.Request) {
+		req := &submodel.MigrateGatewayRequest{}
+		if err := render.Bind(r, req); err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "Bind error", http.StatusBadRequest))
+			return
+		}
+		n, err := db.MigrateGateway(req.OldGateway, req.NewGateway, req.Count)
+		if err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "DB error", http.StatusInternalServerError))
+			return
+		}
+		render.JSON(w, r, map[string]int64{"migrated": n})
 	})
 	r.Get("/activate/{ip}/{status}", func(w http.ResponseWriter, r *http.Request) {
 		ip := chi.URLParam(r, "ip")
@@ -128,6 +144,7 @@ func SubRouter(db submodel.Crud) chi.Router {
 			rt := &runtimemodel.Runtime{}
 			rt.Action = "updatepf"
 			rt.Status = "active"
+			rt.Workerid = int(sub.PfconfigID)
 			err := rtdb.Add(rt)
 			if err != nil {
 				log.Println("update pf failed")
@@ -154,14 +171,12 @@ func SubRouter(db submodel.Crud) chi.Router {
 		}
 		erradd := db.Add(sub)
 		if erradd == nil {
-			dbconn := db.GetDB()
-			rtdb := runtimemodel.New(dbconn)
-			rt := &runtimemodel.Runtime{}
-			rt.Action = "updatepf"
-			rt.Status = "active"
-			err := rtdb.Add(rt)
-			if err != nil {
-				log.Println("update pf failed")
+			coldb := collectionmodel.New(db.GetDB())
+			if err := coldb.Add(collectionmodel.NewForSub(sub.ID)); err != nil {
+				// collections is an optional module - its table may not be
+				// migrated, so this is best-effort and shouldn't fail sub
+				// creation.
+				log.Println("create collection record for sub failed:", err)
 			}
 			render.JSON(w, r, sub)
 			return
@@ -181,15 +196,6 @@ func SubRouter(db submodel.Crud) chi.Router {
 		}
 		err = db.Delete(sub)
 		if err == nil {
-			dbconn := db.GetDB()
-			rtdb := runtimemodel.New(dbconn)
-			rt := &runtimemodel.Runtime{}
-			rt.Action = "updatepf"
-			rt.Status = "active"
-			err := rtdb.Add(rt)
-			if err != nil {
-				log.Println("update pf failed")
-			}
 			render.JSON(w, r, sub)
 			return
 		}

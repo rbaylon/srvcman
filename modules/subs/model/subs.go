@@ -7,29 +7,32 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/rbaylon/srvcman/utils/validate"
 	"gorm.io/gorm"
 )
 
 type Sub struct {
 	gorm.Model
-	FirstName  string `json:"first_name"`
-	LastName   string `json:"last_name"`
-	FramedIp   string `json:"framed_ip"`
-	Type       string `json:"type"`
-	Status     string `json:"status"`
-	Mac        string `json:"mac"`
-	Loc        string `json:"loc"`
-	Downspeed  int    `json:"downspeed"`
-	Upspeed    int    `json:"upspeed"`
-	Burstspeed int    `json:"burstspeed"`
-	Duration   int    `json:"duration"`
-	Gateway    string `json:"gateway"`
-	Priority   int    `json:"priority"`
-	PfconfigID uint   `json:"pfconfig_id"`
-	DueDay     int    `json:"due_day"`
-	OverDue    bool   `json:"over_due"`
-	LaterCount int    `json:"later_count"`
-	Plan       string `json:"plan"`
+	FirstName   string `json:"first_name"`
+	LastName    string `json:"last_name"`
+	FramedIp    string `json:"framed_ip"`
+	Type        string `json:"type"`
+	Status      string `json:"status"`
+	Mac         string `json:"mac"`
+	Loc         string `json:"loc"`
+	Downspeed   int    `json:"downspeed"`
+	Upspeed     int    `json:"upspeed"`
+	Burstspeed  int    `json:"burstspeed"`
+	Duration    int    `json:"duration"`
+	Gateway     string `json:"gateway"`
+	Priority    int    `json:"priority"`
+	PfconfigID  uint   `json:"pfconfig_id"`
+	DueDay      int    `json:"due_day"`
+	OverDue     bool   `json:"over_due"`
+	LaterCount  int    `json:"later_count"`
+	Plan        string `json:"plan"`
+	Pppusername string `json:"pppusername"`
+	Ppppassword string `json:"ppppassword"`
 }
 
 // MigrateDB - Create the table if not exist in DB
@@ -42,7 +45,60 @@ func MigrateDB(db *gorm.DB) {
 
 // Bind interface as required by go-chi/render
 func (a *Sub) Bind(r *http.Request) error {
-	return nil
+	if err := validate.AlnumSpace("first_name", a.FirstName, 100); err != nil {
+		return err
+	}
+	if err := validate.AlnumSpace("last_name", a.LastName, 100); err != nil {
+		return err
+	}
+	if err := validate.IP("framed_ip", a.FramedIp); err != nil {
+		return err
+	}
+	if err := validate.Alnum("type", a.Type, 100); err != nil {
+		return err
+	}
+	if err := validate.Alnum("status", a.Status, 100); err != nil {
+		return err
+	}
+	if err := validate.Alnum("mac", a.Mac, 100); err != nil {
+		return err
+	}
+	if err := validate.AlnumSpace("loc", a.Loc, 100); err != nil {
+		return err
+	}
+	if err := validate.Int("downspeed", a.Downspeed); err != nil {
+		return err
+	}
+	if err := validate.Int("upspeed", a.Upspeed); err != nil {
+		return err
+	}
+	if err := validate.Int("burstspeed", a.Burstspeed); err != nil {
+		return err
+	}
+	if err := validate.Int("duration", a.Duration); err != nil {
+		return err
+	}
+	if err := validate.IP("gateway", a.Gateway); err != nil {
+		return err
+	}
+	if err := validate.IntRange("priority", a.Priority, 0, 7); err != nil {
+		return err
+	}
+	if err := validate.Int("due_day", a.DueDay); err != nil {
+		return err
+	}
+	if err := validate.Int("later_count", a.LaterCount); err != nil {
+		return err
+	}
+	if err := validate.Alnum("plan", a.Plan, 100); err != nil {
+		return err
+	}
+	if err := validate.Alnum("pppusername", a.Pppusername, 100); err != nil {
+		return err
+	}
+	// Ppppassword is intentionally not charset-restricted, same reasoning as
+	// usermodel.User.Password.
+	return validate.MaxLen("ppppassword", a.Ppppassword, 100)
 }
 
 type Crud interface {
@@ -54,7 +110,36 @@ type Crud interface {
 	Delete(sub *Sub) error
 	GetByMac(mac string) (*Sub, error)
 	GetByMacPrefix(macprefix string) (*Sub, error)
+	MigrateGateway(oldGateway, newGateway string, count int) (int64, error)
 	GetDB() *gorm.DB
+}
+
+// MigrateGatewayRequest is the request body for Storage.MigrateGateway -
+// bulk-reassigns up to Count active subs off OldGateway onto NewGateway,
+// e.g. to rebalance load off a WAN link before maintenance. OldGateway and
+// NewGateway may both be "" - an empty Gateway is the existing "Default
+// gateway" convention (see the dashboard's gateway-distribution chart,
+// which already buckets Gateway == "" subs as "Default"), so this lets
+// callers migrate subs onto or off of the default route, not just between
+// two named gateways.
+type MigrateGatewayRequest struct {
+	OldGateway string `json:"old_gateway"`
+	NewGateway string `json:"new_gateway"`
+	Count      int    `json:"count"`
+}
+
+// Bind interface as required by go-chi/render
+func (a *MigrateGatewayRequest) Bind(r *http.Request) error {
+	// validate.IP accepts "" (see its doc comment) - that's relied on here
+	// deliberately, not incidentally, to allow the "Default gateway" case
+	// described above.
+	if err := validate.IP("old_gateway", a.OldGateway); err != nil {
+		return err
+	}
+	if err := validate.IP("new_gateway", a.NewGateway); err != nil {
+		return err
+	}
+	return validate.IntRange("count", a.Count, 1, 100000)
 }
 
 type Storage struct {
@@ -127,6 +212,33 @@ func (s *Storage) GetByMacPrefix(macprefix string) (*Sub, error) {
 		return &sub, nil
 	}
 	return nil, fmt.Errorf("Prefix empty")
+}
+
+// MigrateGateway reassigns up to count active subs whose Gateway is
+// oldGateway to newGateway - the gorm equivalent of:
+//
+//	UPDATE subs SET gateway = ?
+//	WHERE id IN (SELECT id FROM subs WHERE gateway = ? AND status = 'active' LIMIT ?)
+//
+// Done as a select-then-update rather than a single nested query so the
+// same code works identically on SQLite and Postgres (DB_TYPE). Returns
+// how many rows were actually updated.
+func (s *Storage) MigrateGateway(oldGateway, newGateway string, count int) (int64, error) {
+	var ids []uint
+	if err := s.DB.Model(&Sub{}).
+		Where("gateway = ? AND status = ?", oldGateway, "active").
+		Limit(count).
+		Pluck("id", &ids).Error; err != nil {
+		return 0, err
+	}
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	result := s.DB.Model(&Sub{}).Where("id IN ?", ids).Update("gateway", newGateway)
+	if result.Error != nil {
+		return 0, result.Error
+	}
+	return result.RowsAffected, nil
 }
 
 func (s *Storage) Update(sub *Sub) error {

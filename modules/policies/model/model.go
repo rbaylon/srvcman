@@ -6,15 +6,16 @@ import (
 	"net/http"
 
 	groupmodel "github.com/rbaylon/srvcman/modules/groups/model"
+	"github.com/rbaylon/srvcman/utils/validate"
 	"gorm.io/gorm"
 )
 
 type Policy struct {
 	gorm.Model
 	Name     string             `json:"name" gorm:"unique;not null"`
-	Type     string             `json:"type"`
-	Resource string             `json:"resource"`
-	Action   string             `json:"action"`
+	Type     string             `json:"type"`     //module name
+	Resource string             `json:"resource"` //url|'any'
+	Action   string             `json:"action"`   // RW|RO
 	Groups   []groupmodel.Group `json:"groups" gorm:"many2many:policy_groups;"`
 }
 
@@ -28,7 +29,21 @@ func MigrateDB(db *gorm.DB) {
 
 // Bind interface as required by go-chi/render
 func (a *Policy) Bind(r *http.Request) error {
-	return nil
+	if err := validate.Required("name", a.Name); err != nil {
+		return err
+	}
+	if err := validate.Alnum("name", a.Name, 100); err != nil {
+		return err
+	}
+	if err := validate.Alnum("type", a.Type, 100); err != nil {
+		return err
+	}
+	// Resource is either "any" or an exact request path (e.g.
+	// "/api/v1/users/5"), so it needs "/" - Alnum would reject every path.
+	if err := validate.SafeToken("resource", a.Resource, 100); err != nil {
+		return err
+	}
+	return validate.Alnum("action", a.Action, 100)
 }
 
 type Crud interface {
@@ -67,7 +82,7 @@ func (s *Storage) Add(policy *Policy) error {
 
 func (s *Storage) GetAll() ([]Policy, error) {
 	var policies []Policy
-	result := s.DB.Find(&policies)
+	result := s.DB.Preload("Groups").Find(&policies)
 	if result.Error != nil {
 		return nil, result.Error
 	}

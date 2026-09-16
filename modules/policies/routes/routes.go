@@ -8,6 +8,15 @@
 //	    Return-Status: 200 on Success
 //	                   500 on Error
 //
+//	  /api/v1/policys/defaults
+//	    Method: GET
+//	    Headers: Authorization Bearer
+//	    Return: JSON object with list of the default view policy records
+//	            (see policymodel.GetDefaultPolicies), for whichever of them
+//	            currently exist in the DB
+//	    Return-Status: 200 on Success
+//	                   500 on Error
+//
 //	  /api/v1/policys/<policyId>
 //	    Method: GET|PUT|DELETE
 //	    Headers: Authorization Bearer
@@ -53,6 +62,14 @@ func PolicyRouter(db policymodel.Crud) chi.Router {
 		}
 		render.JSON(w, r, res)
 	})
+	r.Get("/defaults", func(w http.ResponseWriter, r *http.Request) {
+		res, errdb := policymodel.GetDefaultPolicies(dbconn)
+		if errdb != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(errdb, "DB error", http.StatusInternalServerError))
+			return
+		}
+		render.JSON(w, r, res)
+	})
 	r.Get("/{policyId}", func(w http.ResponseWriter, r *http.Request) {
 		id, err := strconv.Atoi(chi.URLParam(r, "policyId"))
 		if err != nil {
@@ -77,7 +94,11 @@ func PolicyRouter(db policymodel.Crud) chi.Router {
 			render.Render(w, r, utils.ErrInvalidRequest(err, "Bind error", http.StatusBadRequest))
 			return
 		}
-		oldpolicy, _ := db.GetById(uint(id))
+		oldpolicy, err := db.GetById(uint(id))
+		if err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, fmt.Sprintf("Error finding record for policy ID %s", chi.URLParam(r, "policyId")), http.StatusBadRequest))
+			return
+		}
 		db.RemoveGroups(oldpolicy)
 		policy.ID = uint(id)
 		err = db.Update(&policy)

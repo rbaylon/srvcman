@@ -45,7 +45,7 @@ import (
 )
 
 var tokenAuth *jwtauth.JWTAuth
-var letters = []byte("abcdefghijkmnopqrstuvwxyzABCDEFGHIJKLMNPQRSTUVWXYZ123456789@!")
+var letters = []byte("abcdefghijkmnopqrstuvwxyzABCDEFGHIJKLMNPQRSTUVWXYZ123456789")
 
 type Vreq struct {
 	Hours     int    `json:"hours"`
@@ -85,7 +85,11 @@ func VoucherRouter(db vouchermodel.Crud) chi.Router {
 	r.Get("/value/{voucher}/{ip}/{routerid}", func(w http.ResponseWriter, r *http.Request) {
 		val, uerr := url.QueryUnescape(chi.URLParam(r, "voucher"))
 		if uerr != nil {
-			log.Println("Voucher or sub invalid:", uerr)
+			log.Println("Voucher invalid:", uerr)
+			render.Render(w, r, utils.ErrInvalidRequest(uerr, "Invalid voucher", http.StatusNotFound))
+		}
+		if !utils.IsAlnumStrict(val) {
+			log.Println("Voucher invalid:", uerr)
 			render.Render(w, r, utils.ErrInvalidRequest(uerr, "Invalid voucher", http.StatusNotFound))
 		}
 		voucher, err := db.GetByVoucherValue(val)

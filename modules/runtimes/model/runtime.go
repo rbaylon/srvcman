@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/rbaylon/srvcman/utils/validate"
 	"gorm.io/gorm"
 )
 
@@ -21,7 +22,13 @@ type Runtimes struct {
 
 // Bind interface as required by go-chi/render
 func (a *Runtime) Bind(r *http.Request) error {
-	return nil
+	if err := validate.Alnum("action", a.Action, 100); err != nil {
+		return err
+	}
+	if err := validate.Alnum("status", a.Status, 100); err != nil {
+		return err
+	}
+	return validate.Int("workerid", a.Workerid)
 }
 
 // MigrateDB - Create the table if not exist in DB
@@ -35,11 +42,11 @@ func MigrateDB(db *gorm.DB) {
 type Crud interface {
 	GetAll() ([]Runtime, error)
 	GetById(uid uint) (*Runtime, error)
-	GetByWorkerId(wid uint) (*Runtime, error)
+	GetByWorkerId(wid int) (*Runtime, error)
 	Add(runtime *Runtime) error
 	Update(runtime *Runtime) error
 	Delete(runtime *Runtime) error
-	GetByAction(value string) (*Runtime, error)
+	GetByAction(value string, wid int) (*Runtime, error)
 	GetDB() *gorm.DB
 }
 
@@ -83,7 +90,7 @@ func (s *Storage) GetById(id uint) (*Runtime, error) {
 	return &runtime, nil
 }
 
-func (s *Storage) GetByWorkerId(wid uint) (*Runtime, error) {
+func (s *Storage) GetByWorkerId(wid int) (*Runtime, error) {
 	var runtime Runtime
 	result := s.DB.Where("Workerid = ?", wid).First(&runtime)
 	if result.Error != nil {
@@ -92,9 +99,9 @@ func (s *Storage) GetByWorkerId(wid uint) (*Runtime, error) {
 	return &runtime, nil
 }
 
-func (s *Storage) GetByAction(value string) (*Runtime, error) {
+func (s *Storage) GetByAction(value string, wid int) (*Runtime, error) {
 	var runtime Runtime
-	result := s.DB.Where("Action = ?", value).First(&runtime)
+	result := s.DB.Where("Action = ? AND Workerid = ?", value, wid).First(&runtime)
 	if result.Error != nil {
 		return nil, result.Error
 	}

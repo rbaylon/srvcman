@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/rbaylon/srvcman/utils/validate"
 	"gorm.io/gorm"
 )
 
@@ -31,7 +32,17 @@ func MigrateDB(db *gorm.DB) {
 
 // Bind interface as required by go-chi/render
 func (a *Pflow) Bind(r *http.Request) error {
-	return nil
+	if err := validate.Alnum("device", a.Device, 100); err != nil {
+		return err
+	}
+	if err := validate.IP("src", a.Src); err != nil {
+		return err
+	}
+	if err := validate.IP("dst", a.Dst); err != nil {
+		return err
+	}
+	// IP protocol numbers are an 8-bit field (RFC 790).
+	return validate.IntRange("proto", a.Proto, 0, 255)
 }
 
 func (a *Pflows) Bind(r *http.Request) error {

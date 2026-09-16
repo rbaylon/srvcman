@@ -7,6 +7,7 @@ import (
 	"time"
 
 	runtimemodel "github.com/rbaylon/srvcman/modules/runtimes/model"
+	"github.com/rbaylon/srvcman/utils/validate"
 	"gorm.io/gorm"
 )
 
@@ -43,7 +44,34 @@ func MigrateDB(db *gorm.DB) {
 
 // Bind interface as required by go-chi/render
 func (a *Voucher) Bind(r *http.Request) error {
-	return nil
+	if err := validate.Alnum("value", a.Value, 100); err != nil {
+		return err
+	}
+	if err := validate.Alnum("type", a.Type, 100); err != nil {
+		return err
+	}
+	if err := validate.Int("hours", a.Hours); err != nil {
+		return err
+	}
+	if err := validate.Alnum("status", a.Status, 100); err != nil {
+		return err
+	}
+	if err := validate.Int("downspeed", a.Downspeed); err != nil {
+		return err
+	}
+	if err := validate.Int("upspeed", a.Upspeed); err != nil {
+		return err
+	}
+	if err := validate.Int("burstspeed", a.Burstspeed); err != nil {
+		return err
+	}
+	if err := validate.Int("duration", a.Duration); err != nil {
+		return err
+	}
+	if err := validate.IP("ip", a.Ip); err != nil {
+		return err
+	}
+	return validate.IP("gateway", a.Gateway)
 }
 
 func (a *Vouchers) Bind(r *http.Request) error {
@@ -108,6 +136,7 @@ func (s *Storage) DisableExpired() error {
 		return result.Error
 	}
 	update := false
+	workerid := 0
 	for _, v := range vouchers {
 		overtime := time.Since(v.DateExpires).Minutes()
 		if overtime > 0 {
@@ -115,6 +144,7 @@ func (s *Storage) DisableExpired() error {
 			s.DB.Save(&v)
 			log.Println("Code expired:", v.Value)
 			update = true
+			workerid = int(v.PfconfigID)
 		}
 	}
 	if update {
@@ -122,6 +152,7 @@ func (s *Storage) DisableExpired() error {
 		rt := &runtimemodel.Runtime{}
 		rt.Action = "updatepf"
 		rt.Status = "active"
+		rt.Workerid = workerid
 		err := rtdb.Add(rt)
 		if err != nil {
 			log.Println("update pf failed")

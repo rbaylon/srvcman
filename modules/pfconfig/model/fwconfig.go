@@ -6,11 +6,14 @@ import (
 	"net/http"
 
 	dhcpmodel "github.com/rbaylon/srvcman/modules/dhcps/model"
+	fwmodel "github.com/rbaylon/srvcman/modules/firewall/model"
 	pfifacemodel "github.com/rbaylon/srvcman/modules/pfifaces/model"
 	pflowmodel "github.com/rbaylon/srvcman/modules/pflows/model"
 	planmodel "github.com/rbaylon/srvcman/modules/plans/model"
 	submodel "github.com/rbaylon/srvcman/modules/subs/model"
+	vlanmodel "github.com/rbaylon/srvcman/modules/vlans/model"
 	vouchermodel "github.com/rbaylon/srvcman/modules/vouchers/model"
+	"github.com/rbaylon/srvcman/utils/validate"
 	"gorm.io/gorm"
 )
 
@@ -30,6 +33,8 @@ type Pfconfig struct {
 	Pflows            []pflowmodel.Pflow     `json:"pflows"`
 	Workername        string                 `json:"workername"`
 	Plans             []planmodel.Plan       `json:"plans"`
+	Rules             []fwmodel.Fw           `json:"rules"`
+	Vlans             []vlanmodel.Vlan       `json:"vlans"`
 }
 
 // MigrateDB - Create the table if not exist in DB
@@ -42,7 +47,25 @@ func MigrateDB(db *gorm.DB) {
 
 // Bind interface as required by go-chi/render
 func (a *Pfconfig) Bind(r *http.Request) error {
-	return nil
+	if err := validate.IPList("wifi_ip_list", a.WifiIpList); err != nil {
+		return err
+	}
+	if err := validate.IPList("subs_ip_list", a.SubsIpList); err != nil {
+		return err
+	}
+	if err := validate.IntRange("subs_portal_port", a.SubsPortalPort, 0, 65535); err != nil {
+		return err
+	}
+	if err := validate.IntRange("captive_portal_port", a.CaptivePortalPort, 0, 65535); err != nil {
+		return err
+	}
+	if err := validate.Alnum("router", a.Router, 100); err != nil {
+		return err
+	}
+	if err := validate.IP("dns", a.Dns); err != nil {
+		return err
+	}
+	return validate.Alnum("workername", a.Workername, 100)
 }
 
 type Crud interface {
@@ -97,7 +120,8 @@ func (s *Storage) GetAll() ([]Pfconfig, error) {
 
 func (s *Storage) GetById(id uint) (*Pfconfig, error) {
 	var pfconfig Pfconfig
-	result := s.DB.Preload("Ifaces").Preload("Vouchers").Preload("Dhcps").Preload("Subs").First(&pfconfig, id)
+	result := s.DB.Preload("Ifaces").Preload("Dhcps").Preload(
+		"Pflows").Preload("Plans").Preload("Vlans").First(&pfconfig, id)
 	if result.Error != nil {
 		return nil, result.Error
 	}
@@ -106,7 +130,10 @@ func (s *Storage) GetById(id uint) (*Pfconfig, error) {
 
 func (s *Storage) GetByRouterId(value string) (*Pfconfig, error) {
 	var pfconfig Pfconfig
-	result := s.DB.Where("Router = ?", value).Preload("Ifaces").Preload("Vouchers").Preload("Dhcps").Preload("Subs").Preload("Pflows").Preload("Plans").First(&pfconfig)
+	result := s.DB.Where("Router = ?", value).Preload(
+		"Ifaces").Preload("Vouchers").Preload("Dhcps").Preload(
+		"Subs").Preload("Pflows").Preload("Plans").Preload(
+		"Rules").Preload("Vlans").First(&pfconfig)
 	if result.Error != nil {
 		return nil, result.Error
 	}

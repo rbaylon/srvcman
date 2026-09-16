@@ -2,7 +2,6 @@ package security
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/go-chi/render"
 	"github.com/rbaylon/srvcman/database"
+	changemodel "github.com/rbaylon/srvcman/modules/changes/model"
 	policymodel "github.com/rbaylon/srvcman/modules/policies/model"
 	usermodel "github.com/rbaylon/srvcman/modules/users/model"
 	"github.com/rbaylon/srvcman/utils"
@@ -37,7 +37,7 @@ func CheckPasswordHash(password, hash string) bool {
 
 func Login(db usermodel.Crud) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Println(r.RequestURI, r.Method, r.Header.Get("X-Real-IP"))
+		fmt.Println(r.RequestURI, r.Method, r.Header.Get("X-Real-IP"))
 		username, password, ok := r.BasicAuth()
 		if ok {
 			user, err := db.GetByUsername(username)
@@ -86,13 +86,13 @@ func sendtoken(w http.ResponseWriter, r *http.Request, username string) {
 func TokenRequired(db *gorm.DB, module string) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			log.Println(r.Method, r.RequestURI)
+			fmt.Println(r.Method, r.RequestURI)
 			reqtoken := r.Header.Get("Authorization")
 			if !strings.Contains(reqtoken, "Bearer ") {
 				render.Render(w, r, utils.ErrInvalidRequest(fmt.Errorf("JWT error"), "Authorization Bearer not found.", http.StatusUnauthorized))
 				return
 			}
-			//log.Println(reqtoken)
+			//fmt.Println(reqtoken)
 			token := reqtoken[len("Bearer "):]
 			err := validateToken(token, r, db, module)
 			if err != nil {
@@ -125,6 +125,18 @@ func createToken(username string) (string, error) {
 
 func validateToken(tokenString string, r *http.Request, db *gorm.DB, module string) error {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		// createToken only ever signs with HS256 - reject anything else
+		// up front instead of relying on the keyfunc always handing back
+		// the same HMAC secret being *incidentally* safe against a
+		// crafted "alg" header (e.g. "none", which golang-jwt v3 only
+		// blocks because SigningMethodNone.Verify specifically rejects
+		// any key that isn't its own sentinel type). Explicitly checking
+		// the method here is the standard golang-jwt-recommended pattern
+		// and makes this inspectably safe rather than safe by an
+		// implementation detail of a specific algorithm's Verify func.
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
 		return secretKey, nil
 	})
 	if err != nil {
@@ -139,23 +151,44 @@ func validateToken(tokenString string, r *http.Request, db *gorm.DB, module stri
 	deny := true
 	username := ""
 	if claims, ok := token.Claims.(jwt.MapClaims); ok {
-		user := claims["username"]
-		username = user.(string)
+		// An unchecked user.(string) here would panic on a token whose
+		// username claim isn't a JSON string - unreachable with tokens
+		// this server itself issues (createToken always sets it to a
+		// string), but a crafted token signed with a leaked secret, or a
+		// bug in a future caller of createToken, shouldn't be able to
+		// crash request handling.
+		username, ok = claims["username"].(string)
+		if !ok {
+			return fmt.Errorf("Invalid token.")
+		}
 		if username == "admin" {
-			log.Printf("Access granted: %s %s %s from %s\n", username, method, path, remote)
+			fmt.Printf("Access granted: %s %s %s from %s\n", username, method, path, remote)
+			data := fmt.Sprintf("%s %s %s %s", path, method, username, remote)
+			if !strings.Contains(method, "GET") {
+				audittrail(data, module, db)
+			}
 			return nil
 		}
+		// userdata/poldata errors (a DB hiccup, or a stale JWT for a
+		// since-deleted user) used to be silently ignored here, and
+		// userdata.Groups below was dereferenced unconditionally -
+		// nil-pointer panic on every non-admin request while userdb is
+		// erroring. Skip the loop instead so deny stays true and falls
+		// through to the ordinary "Access denied" handling below.
 		userdb := usermodel.New(db)
-		userdata, _ := userdb.GetByUsername(username)
+		userdata, userErr := userdb.GetByUsername(username)
 		poldb := policymodel.New(db)
-		poldata, _ := poldb.GetByType(module)
+		poldata, polErr := poldb.GetByType(module)
+		if userErr != nil || polErr != nil {
+			poldata = nil
+		}
 		for _, p := range poldata {
 			for _, pg := range p.Groups {
 				for _, ug := range userdata.Groups {
 					if ug.Groupname == pg.Groupname {
 						switch p.Action {
 						case "RW":
-							deny = false
+							//deny = false
 							if p.Resource != "any" {
 								if path == p.Resource {
 									deny = false
@@ -165,7 +198,7 @@ func validateToken(tokenString string, r *http.Request, db *gorm.DB, module stri
 							}
 						case "RO":
 							if r.Method == "GET" {
-								deny = false
+								//deny = false
 								if p.Resource != "any" {
 									if path == p.Resource {
 										deny = false
@@ -181,9 +214,28 @@ func validateToken(tokenString string, r *http.Request, db *gorm.DB, module stri
 		}
 	}
 	if deny {
-		log.Printf("Access denied: %s %s %s from %s\n", username, method, path, remote)
+		fmt.Printf("Access denied: %s %s %s from %s\n", username, method, path, remote)
 		return fmt.Errorf("Access denied.")
 	}
-	log.Printf("Access granted: %s %s %s from %s\n", username, method, path, remote)
+	fmt.Printf("Access granted: %s %s %s from %s\n", username, method, path, remote)
+	data := fmt.Sprintf("%s %s %s %s", path, method, username, remote)
+	if !strings.Contains(method, "GET") {
+		audittrail(data, module, db)
+	}
+
 	return nil
+}
+
+func audittrail(data string, module string, db *gorm.DB) {
+	chdb := changemodel.New(db)
+	ch := changemodel.Change{}
+	ch.Module = module
+	ch.Data = data
+	ch.Applied = "pending"
+	err := chdb.Add(&ch)
+	if err != nil {
+		fmt.Printf("Failed to create %s change: %s", module, data)
+	} else {
+		fmt.Printf("%s change success: %s", module, data)
+	}
 }

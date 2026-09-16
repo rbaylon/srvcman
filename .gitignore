@@ -22,3 +22,6 @@ go.work
 .env
 *.db
 srvcman
+tags
+CLAUDE.md
+.claude

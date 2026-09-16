@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/rbaylon/srvcman/utils/validate"
 	"gorm.io/gorm"
 )
 
@@ -30,7 +31,15 @@ func MigrateDB(db *gorm.DB) {
 
 // Bind interface as required by go-chi/render
 func (a *Payment) Bind(r *http.Request) error {
-	return nil
+	if err := validate.Date("date_paid", a.DatePaid, "2006-01-02"); err != nil {
+		return err
+	}
+	// ScreenShot holds a stored filename/reference, not raw image data, so
+	// it's treated as a path-like token rather than plain Alnum.
+	if err := validate.SafeToken("screen_shot", a.ScreenShot, 100); err != nil {
+		return err
+	}
+	return validate.Int("amount_paid", a.AmountPaid)
 }
 
 func (a *Payments) Bind(r *http.Request) error {

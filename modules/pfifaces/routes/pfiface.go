@@ -8,6 +8,30 @@
 //	    Return-Status: 200 on Success
 //	                   500 on Error
 //
+//	  /api/v1/pfifaces/physical
+//	    Method: GET
+//	    Headers: Authorization Bearer
+//	    Return: JSON object with list of pfiface objects where physical is true
+//	    Return-Status: 200 on Success
+//	                   500 on Error
+//
+//	  /api/v1/pfifaces/devices
+//	    Method: GET
+//	    Headers: Authorization Bearer
+//	    Return: JSON array of device names detected on this host (physical
+//	            NICs plus configured VLAN devices)
+//	    Return-Status: 200 on Success
+//	                   500 on Error
+//
+//	  /api/v1/pfifaces/traffic
+//	    Method: GET
+//	    Headers: Authorization Bearer
+//	    Return: JSON array of {device, ibytes, obytes} cumulative byte
+//	            counters read from this host right now. Callers poll this
+//	            repeatedly and diff successive snapshots to get a rate.
+//	    Return-Status: 200 on Success
+//	                   500 on Error
+//
 //	  /api/v1/pfifaces/<pfifaceId>
 //	    Method: GET|PUT|DELETE
 //	    Headers: Authorization Bearer
@@ -31,14 +55,13 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/jwtauth/v5"
 	"github.com/go-chi/render"
 	pfifacemodel "github.com/rbaylon/srvcman/modules/pfifaces/model"
 	"github.com/rbaylon/srvcman/modules/security"
 	"github.com/rbaylon/srvcman/utils"
 )
 
-var tokenAuth *jwtauth.JWTAuth
+//var tokenAuth *jwtauth.JWTAuth
 
 func PfifaceRouter(db pfifacemodel.Crud) chi.Router {
 	r := chi.NewRouter()
@@ -49,6 +72,30 @@ func PfifaceRouter(db pfifacemodel.Crud) chi.Router {
 		res, errdb := db.GetAll()
 		if errdb != nil {
 			render.Render(w, r, utils.ErrInvalidRequest(errdb, "DB error", http.StatusInternalServerError))
+			return
+		}
+		render.JSON(w, r, res)
+	})
+	r.Get("/physical", func(w http.ResponseWriter, r *http.Request) {
+		res, errdb := db.GetPhysical()
+		if errdb != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(errdb, "DB error", http.StatusInternalServerError))
+			return
+		}
+		render.JSON(w, r, res)
+	})
+	r.Get("/devices", func(w http.ResponseWriter, r *http.Request) {
+		res, err := db.ListDevices()
+		if err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "Device list error", http.StatusInternalServerError))
+			return
+		}
+		render.JSON(w, r, res)
+	})
+	r.Get("/traffic", func(w http.ResponseWriter, r *http.Request) {
+		res, err := db.GetTrafficStats()
+		if err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "Traffic stats error", http.StatusInternalServerError))
 			return
 		}
 		render.JSON(w, r, res)

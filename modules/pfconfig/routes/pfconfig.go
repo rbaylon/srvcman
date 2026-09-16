@@ -16,6 +16,19 @@
 //	                   500 on Error
 //	                   400 on Bad request
 //
+//	  /api/v1/pfconfigs/<pfconfigId>/sysinfo
+//	    Method: GET
+//	    Headers: Authorization Bearer
+//	    Return: JSON {"system_info": {...}, "error": <text, omitted if none>}
+//	            - a snapshot of the OpenBSD host this pfconfig's arkgated
+//	            runs on (see pfconfigmodel.GetSystemInfo). Always 200; a
+//	            failure reaching arkgated is reported in "error" rather
+//	            than as an HTTP error status, since this is supplementary
+//	            info for the dashboard.
+//	    Return-Status: 200 on Success
+//	                   400 on Bad request (invalid pfconfigId)
+//	                   500 if pfconfigId doesn't exist
+//
 //	  /api/v1/pfconfigs/create
 //	    Method: POST
 //	    Headers: Authorization Bearer
@@ -67,6 +80,26 @@ func PfconfigRouter(db pfconfigmodel.Crud) chi.Router {
 			return
 		}
 		render.JSON(w, r, pfconfig)
+	})
+	r.Get("/{pfconfigId}/sysinfo", func(w http.ResponseWriter, r *http.Request) {
+		id, err := strconv.Atoi(chi.URLParam(r, "pfconfigId"))
+		if err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, fmt.Sprintf("Invalid pfconfig ID %s", chi.URLParam(r, "pfconfigId")), http.StatusBadRequest))
+			return
+		}
+		if _, err := db.GetById(uint(id)); err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "DB error", http.StatusInternalServerError))
+			return
+		}
+		info, sierr := pfconfigmodel.GetSystemInfo()
+		resp := struct {
+			SystemInfo map[string]string `json:"system_info"`
+			Error      string            `json:"error,omitempty"`
+		}{SystemInfo: info}
+		if sierr != nil {
+			resp.Error = sierr.Error()
+		}
+		render.JSON(w, r, resp)
 	})
 	r.Get("/query/{routerid}", func(w http.ResponseWriter, r *http.Request) {
 		val := chi.URLParam(r, "routerid")

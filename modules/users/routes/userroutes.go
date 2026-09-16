@@ -33,6 +33,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/jwtauth/v5"
 	"github.com/go-chi/render"
+	groupmodel "github.com/rbaylon/srvcman/modules/groups/model"
+	policymodel "github.com/rbaylon/srvcman/modules/policies/model"
 	"github.com/rbaylon/srvcman/modules/security"
 	usermodel "github.com/rbaylon/srvcman/modules/users/model"
 	"github.com/rbaylon/srvcman/utils"
@@ -94,7 +96,11 @@ func UserRouter(db usermodel.Crud) chi.Router {
 			render.Render(w, r, utils.ErrInvalidRequest(err, "Bind error", http.StatusBadRequest))
 			return
 		}
-		olduser, _ := db.GetById(uint(id))
+		olduser, err := db.GetById(uint(id))
+		if err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, fmt.Sprintf("Error finding record for user ID %s", chi.URLParam(r, "userId")), http.StatusBadRequest))
+			return
+		}
 		db.RemoveGroups(olduser)
 		user.ID = uint(id)
 		err = db.Update(&user)
@@ -112,7 +118,50 @@ func UserRouter(db usermodel.Crud) chi.Router {
 		}
 		err := db.Add(&user)
 		if err == nil {
-			render.JSON(w, r, user)
+			dbconn := db.GetDB()
+			grpdb := groupmodel.New(dbconn)
+			group := groupmodel.Group{}
+			group.Groupname = user.Username
+			err = grpdb.Add(&group)
+			if err == nil {
+				user.Groups = append(user.Groups, group)
+				db.Update(&user)
+				poldb := policymodel.New(dbconn)
+				ropolicy := policymodel.Policy{
+					Name:     "DefaultProfile" + user.Username + "RO",
+					Type:     "users",
+					Resource: "/api/v1/users/username/" + user.Username,
+					Action:   "RO",
+					Groups:   []groupmodel.Group{group},
+				}
+				err = poldb.Add(&ropolicy)
+				if err != nil {
+					fmt.Println("Error adding default user policy for user", user.Username)
+				}
+				rwpolicy := policymodel.Policy{
+					Name:     "DefaultProfile" + user.Username + "RW",
+					Type:     "users",
+					Resource: "/api/v1/users/" + strconv.FormatUint(uint64(user.ID), 10),
+					Action:   "Rw",
+					Groups:   []groupmodel.Group{group},
+				}
+				err = poldb.Add(&rwpolicy)
+				if err != nil {
+					fmt.Println("Error adding default user policy for user", user.Username)
+				}
+				defpols, err := policymodel.GetDefaultPolicies(poldb.DB)
+				if err != nil {
+					fmt.Println("Error getting default policies")
+				}
+				for _, p := range defpols {
+					p.Groups = append(p.Groups, group)
+					err = poldb.Update(&p)
+					if err != nil {
+						fmt.Println("Error adding group", group.Groupname, "to", p.Name)
+					}
+				}
+				render.JSON(w, r, user)
+			}
 			return
 		}
 		render.Render(w, r, utils.ErrInvalidRequest(err, "DB error", http.StatusInternalServerError))

@@ -1,0 +1,12 @@
+{
+  "modules": [
+    "vouchers",
+    "dhcps",
+    "firewall",
+    "payments",
+    "tunnels",
+    "collections",
+    "pppoe",
+    "pflow"
+  ]
+}

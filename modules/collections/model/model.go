@@ -4,30 +4,92 @@ package collectionmodel
 import (
 	"log"
 	"net/http"
+	"time"
 
 	submodel "github.com/rbaylon/srvcman/modules/subs/model"
+	"github.com/rbaylon/srvcman/utils/validate"
 	"gorm.io/gorm"
 )
 
 type Collection struct {
 	gorm.Model
-	Year    string `json:"year"`
-	Jan     int    `json:"jan"`
-	Feb     int    `json:"feb"`
-	Mar     int    `json:"mar"`
-	Apr     int    `json:"apr"`
-	May     int    `json:"may"`
-	Jun     int    `json:"jun"`
-	Jul     int    `json:"jul"`
-	Aug     int    `json:"aug"`
-	Sep     int    `json:"sep"`
-	Oct     int    `json:"oct"`
-	Nov     int    `json:"nov"`
-	Dec     int    `json:"dec"`
-	SubID   uint   `json:"sub_id"`
-	SubName string `json:"sub_name"`
-	SubDue  int    `json:"sub_due"`
-	SubPlan string `json:"sub_plan"`
+	Year  string      `json:"year"`
+	Jan   int         `json:"jan"`
+	Feb   int         `json:"feb"`
+	Mar   int         `json:"mar"`
+	Apr   int         `json:"apr"`
+	May   int         `json:"may"`
+	Jun   int         `json:"jun"`
+	Jul   int         `json:"jul"`
+	Aug   int         `json:"aug"`
+	Sep   int         `json:"sep"`
+	Oct   int         `json:"oct"`
+	Nov   int         `json:"nov"`
+	Dec   int         `json:"dec"`
+	SubID uint        `json:"sub_id"`
+	Sub   submodel.Sub `json:"-" gorm:"foreignKey:SubID"`
+	// SubName, SubDue and SubPlan are derived from the Sub relationship
+	// (see populateSubInfo) rather than stored - they're kept as plain
+	// struct fields, not DB columns, so the API response shape used by
+	// srvcmanui's collections views doesn't change.
+	SubName string `json:"sub_name" gorm:"-"`
+	SubDue  int    `json:"sub_due" gorm:"-"`
+	SubPlan string `json:"sub_plan" gorm:"-"`
+}
+
+// NewForSub builds the Collection record to create for a newly created sub:
+// one row for the current year, with the current month marked -1 (pending)
+// and every other month left at its zero value.
+func NewForSub(subID uint) *Collection {
+	c := &Collection{
+		Year:  time.Now().Format("2006"),
+		SubID: subID,
+	}
+	switch time.Now().Month() {
+	case time.January:
+		c.Jan = -1
+	case time.February:
+		c.Feb = -1
+	case time.March:
+		c.Mar = -1
+	case time.April:
+		c.Apr = -1
+	case time.May:
+		c.May = -1
+	case time.June:
+		c.Jun = -1
+	case time.July:
+		c.Jul = -1
+	case time.August:
+		c.Aug = -1
+	case time.September:
+		c.Sep = -1
+	case time.October:
+		c.Oct = -1
+	case time.November:
+		c.Nov = -1
+	case time.December:
+		c.Dec = -1
+	}
+	return c
+}
+
+// populateSubInfo fills the derived SubName/SubDue/SubPlan fields from the
+// preloaded Sub relationship. A record whose Sub failed to preload (e.g. a
+// dangling SubID) is left with its zero values.
+func populateSubInfo(c *Collection) {
+	if c.Sub.ID == 0 {
+		return
+	}
+	c.SubName = c.Sub.FirstName + " " + c.Sub.LastName
+	c.SubDue = c.Sub.DueDay
+	c.SubPlan = c.Sub.Plan
+}
+
+func populateSubInfoAll(collections []Collection) {
+	for k := range collections {
+		populateSubInfo(&collections[k])
+	}
 }
 
 type Collections struct {
@@ -44,7 +106,23 @@ func MigrateDB(db *gorm.DB) {
 
 // Bind interface as required by go-chi/render
 func (a *Collection) Bind(r *http.Request) error {
-	return nil
+	if err := validate.Alnum("year", a.Year, 100); err != nil {
+		return err
+	}
+	for field, v := range map[string]int{
+		"jan": a.Jan, "feb": a.Feb, "mar": a.Mar, "apr": a.Apr,
+		"may": a.May, "jun": a.Jun, "jul": a.Jul, "aug": a.Aug,
+		"sep": a.Sep, "oct": a.Oct, "nov": a.Nov, "dec": a.Dec,
+		"sub_due": a.SubDue,
+	} {
+		if err := validate.Int(field, v); err != nil {
+			return err
+		}
+	}
+	if err := validate.AlnumSpace("sub_name", a.SubName, 100); err != nil {
+		return err
+	}
+	return validate.Alnum("sub_plan", a.SubPlan, 100)
 }
 
 func (a *Collections) Bind(r *http.Request) error {
@@ -95,49 +173,41 @@ func (s *Storage) Add(collection *Collection) error {
 
 func (s *Storage) GetAll() ([]Collection, error) {
 	var collections []Collection
-	result := s.DB.Find(&collections)
+	result := s.DB.Preload("Sub").Find(&collections)
 	if result.Error != nil {
 		return nil, result.Error
 	}
+	populateSubInfoAll(collections)
 	return collections, nil
 }
 
 func (s *Storage) GetByYear(y string) ([]Collection, error) {
 	var collections []Collection
-	result := s.DB.Where("year = ?", y).Find(&collections)
+	result := s.DB.Preload("Sub").Where("year = ?", y).Find(&collections)
 	if result.Error != nil {
 		return nil, result.Error
 	}
-	dbconn := s.GetDB()
-	subdb := submodel.New(dbconn)
-	for k, v := range collections {
-		sub, err := subdb.GetById(v.SubID)
-		if err != nil {
-			log.Println("Error getting sub name from collections", err)
-			continue
-		}
-		collections[k].SubName = sub.FirstName + " " + sub.LastName
-		collections[k].SubDue = sub.DueDay
-		collections[k].SubPlan = sub.Plan
-	}
+	populateSubInfoAll(collections)
 	return collections, nil
 }
 
 func (s *Storage) GetById(id uint) (*Collection, error) {
 	var collection Collection
-	result := s.DB.First(&collection, id)
+	result := s.DB.Preload("Sub").First(&collection, id)
 	if result.Error != nil {
 		return nil, result.Error
 	}
+	populateSubInfo(&collection)
 	return &collection, nil
 }
 
 func (s *Storage) GetBySubId(value uint) ([]Collection, error) {
 	var collections []Collection
-	result := s.DB.Where("sub_id = ?", value).Find(&collections)
+	result := s.DB.Preload("Sub").Where("sub_id = ?", value).Find(&collections)
 	if result.Error != nil {
 		return nil, result.Error
 	}
+	populateSubInfoAll(collections)
 	return collections, nil
 }
 

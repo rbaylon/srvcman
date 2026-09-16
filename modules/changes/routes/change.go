@@ -1,0 +1,260 @@
+// Package Changeroutes - Arkgate API Change module
+//
+//	Module Routes:
+//	  /api/v1/changes
+//	    Method: GET
+//	    Headers: Authorization Bearer
+//	    Return: JSON object with list of Change objects
+//	    Return-Status: 200 on Success
+//	                   500 on Error
+//
+//	  /api/v1/changes/<ChangeId>
+//	    Method: GET|PUT|DELETE
+//	    Headers: Authorization Bearer
+//	    Return: JSON Change object ( exept for delete method )
+//	    Return-Status: 200 on Success
+//	                   500 on Error
+//	                   400 on Bad request
+//
+//	  /api/v1/changes/create
+//	    Method: POST
+//	    Headers: Authorization Bearer
+//	    Return: JSON Change object ( exept for delete method )
+//	    Return-Status: 200 on Success
+//	                   500 on Error
+//	                   400 on Bad request
+package changeroutes
+
+import (
+	"fmt"
+	"log"
+	"net/http"
+	"strconv"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/render"
+	Acmd "github.com/rbaylon/arkgatecmd"
+	Changemodel "github.com/rbaylon/srvcman/modules/changes/model"
+	"github.com/rbaylon/srvcman/modules/security"
+	"github.com/rbaylon/srvcman/utils"
+)
+
+//var tokenAuth *jwtauth.JWTAuth
+
+func ChangeRouter(db Changemodel.Crud) chi.Router {
+	r := chi.NewRouter()
+	dbconn := db.GetDB()
+	r.Use(security.TokenRequired(dbconn, "Changes"))
+
+	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		res, errdb := db.GetAll()
+		if errdb != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(errdb, "DB error", http.StatusInternalServerError))
+			return
+		}
+		render.JSON(w, r, res)
+	})
+	r.Put("/pending", func(w http.ResponseWriter, r *http.Request) {
+		res, errdb := db.GetApplied("pending")
+		if errdb != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(errdb, "DB error", http.StatusInternalServerError))
+			return
+		}
+		errors := []Changemodel.Change{}
+		changes := make(map[string]int)
+		for _, data := range res {
+			data.Applied = "yes"
+			changes[data.Module] += 1
+			err := db.Update(&data)
+			if err != nil {
+				log.Printf("Error updating change: %d", data.ID)
+				errors = append(errors, data)
+			}
+		}
+		pfcmd := Acmd.GetPFcmds("/tmp/")
+		ifchange := false
+		if changes["pfifaces"] > 0 {
+			// arkgated generates its own hostname.<if>/mygate files (from
+			// live data it fetches from this API, see
+			// config/pf.ConfigCreate) and does the actual backup/cp/mv into
+			// /etc plus the netstart itself - it no longer depends on
+			// srvcman having written those files locally first, since
+			// srvcman and arkgated may run on separate hosts. Only files
+			// whose content actually changed get promoted/restarted.
+			ifchange = true
+			applycmd := Acmd.PrepareCmd("ApplyIfaces", "true", []string{})
+			if err := applycmd.SendCmd(utils.GetArkConn()); err != nil {
+				log.Println("Failed to apply interface changes:", err)
+				ifchange = false
+			}
+		}
+		if changes["subs"] > 0 || changes["firewall"] > 0 || ifchange {
+			err := pfcmd["check"].SendCmd(utils.GetArkConn())
+			if err != nil {
+				exeerror := Changemodel.Change{}
+				exeerror.Module = "subs"
+				exeerror.Data = "error in /tmp/pf.conf"
+				errors = append(errors, exeerror)
+			}
+			pfcmd["backup"].SendCmd(utils.GetArkConn())
+			pfcmd["move"].SendCmd(utils.GetArkConn())
+			err = pfcmd["apply"].SendCmd(utils.GetArkConn())
+			if err != nil {
+				exeerror := Changemodel.Change{}
+				exeerror.Module = "subs"
+				exeerror.Data = "error applying /tmp/pf.conf"
+				errors = append(errors, exeerror)
+				pfcmd["revert"].SendCmd(utils.GetArkConn())
+			}
+		}
+		if changes["dhcpserver"] > 0 {
+			dhcpconf := "/tmp/dhcpd.conf"
+			dhcpcmd := Acmd.GetServiceCmds("dhcpd", "/usr/sbin/dhcpd", "/etc/", dhcpconf)
+			dhcprc := Acmd.GetRcCmds("dhcpd")
+			err := dhcpcmd["check"].SendCmd(utils.GetArkConn())
+			if err != nil {
+				exeerror := Changemodel.Change{}
+				exeerror.Module = "dhcpserver"
+				exeerror.Data = "error in " + dhcpconf
+				errors = append(errors, exeerror)
+			}
+			dhcpcmd["backup"].SendCmd(utils.GetArkConn())
+			dhcpcmd["stage"].SendCmd(utils.GetArkConn())
+			err = dhcprc["restart"].SendCmd(utils.GetArkConn())
+			if err != nil {
+				exeerror := Changemodel.Change{}
+				exeerror.Module = "dhcpserver"
+				exeerror.Data = "error applying " + dhcpconf
+				errors = append(errors, exeerror)
+				dhcpcmd["revert"].SendCmd(utils.GetArkConn())
+			}
+		}
+		if changes["unbounddns"] > 0 {
+			unboundconf := "/tmp/unbound.conf"
+			unboundcmd := Acmd.GetServiceCmds("unbound", "/usr/sbin/unbound-checkconf", "/var/unbound/etc/", unboundconf)
+			unboundrc := Acmd.GetRcCmds("unbound")
+			err := unboundcmd["check_unbound"].SendCmd(utils.GetArkConn())
+			if err != nil {
+				exeerror := Changemodel.Change{}
+				exeerror.Module = "unbounddns"
+				exeerror.Data = "error in " + unboundconf
+				errors = append(errors, exeerror)
+			}
+			unboundcmd["backup"].SendCmd(utils.GetArkConn())
+			unboundcmd["stage"].SendCmd(utils.GetArkConn())
+			err = unboundrc["restart"].SendCmd(utils.GetArkConn())
+			if err != nil {
+				exeerror := Changemodel.Change{}
+				exeerror.Module = "unbounddns"
+				exeerror.Data = "error applying " + unboundconf
+				errors = append(errors, exeerror)
+				unboundcmd["revert"].SendCmd(utils.GetArkConn())
+			}
+		}
+		if changes["pppoes"] > 0 {
+			npppdconf := "/tmp/npppd.conf"
+			// npppd has no built-in config-validate mode (unlike pfctl -nf
+			// or unbound-checkconf), so there's no "check" step here.
+			npppdcmd := Acmd.GetServiceCmds("npppd", "", "/etc/npppd/", npppdconf)
+			npppdrc := Acmd.GetRcCmds("npppd")
+			npppdcmd["backup"].SendCmd(utils.GetArkConn())
+			npppdcmd["stage"].SendCmd(utils.GetArkConn())
+			err := npppdrc["restart"].SendCmd(utils.GetArkConn())
+			if err != nil {
+				exeerror := Changemodel.Change{}
+				exeerror.Module = "pppoes"
+				exeerror.Data = "error applying " + npppdconf
+				errors = append(errors, exeerror)
+				npppdcmd["revert"].SendCmd(utils.GetArkConn())
+			}
+		}
+		//utils.GetArkConn()
+		render.JSON(w, r, errors)
+	})
+	r.Get("/pending", func(w http.ResponseWriter, r *http.Request) {
+		res, errdb := db.GetApplied("pending")
+		if errdb != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(errdb, "DB error", http.StatusInternalServerError))
+			return
+		}
+		render.JSON(w, r, res)
+	})
+	r.Get("/{ChangeId}", func(w http.ResponseWriter, r *http.Request) {
+		id, err := strconv.Atoi(chi.URLParam(r, "ChangeId"))
+		if err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, fmt.Sprintf("Invalid Change ID %s", chi.URLParam(r, "ChangeId")), http.StatusBadRequest))
+			return
+		}
+		Change, err := db.GetById(uint(id))
+		if err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "DB error", http.StatusInternalServerError))
+			return
+		}
+		render.JSON(w, r, Change)
+	})
+	r.Get("/sub/{ChangeId}", func(w http.ResponseWriter, r *http.Request) {
+		id, err := strconv.Atoi(chi.URLParam(r, "ChangeId"))
+		if err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, fmt.Sprintf("Invalid Change ID %s", chi.URLParam(r, "ChangeId")), http.StatusBadRequest))
+			return
+		}
+		Changes, err := db.GetBySubId(uint(id))
+		if err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "DB error", http.StatusInternalServerError))
+			return
+		}
+		render.JSON(w, r, Changes)
+	})
+	r.Put("/{ChangeId}", func(w http.ResponseWriter, r *http.Request) {
+		id, err := strconv.Atoi(chi.URLParam(r, "ChangeId"))
+		if err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, fmt.Sprintf("Invalid Change ID %s", chi.URLParam(r, "ChangeId")), http.StatusBadRequest))
+			return
+		}
+		Change := Changemodel.Change{}
+		if err = render.Bind(r, &Change); err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "Bind error", http.StatusBadRequest))
+			return
+		}
+		Change.ID = uint(id)
+		err = db.Update(&Change)
+		if err == nil {
+			render.JSON(w, r, Change)
+			return
+		}
+		render.Render(w, r, utils.ErrInvalidRequest(err, fmt.Sprintf("Error updating record for Change  ID %s", chi.URLParam(r, "ChangeId")), http.StatusBadRequest))
+	})
+	r.Post("/create", func(w http.ResponseWriter, r *http.Request) {
+		Change := Changemodel.Change{}
+		if err := render.Bind(r, &Change); err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "Bind error", http.StatusBadRequest))
+			return
+		}
+		err := db.Add(&Change)
+		if err == nil {
+			render.JSON(w, r, Change)
+			return
+		}
+		render.Render(w, r, utils.ErrInvalidRequest(err, "DB error", http.StatusInternalServerError))
+	})
+	r.Delete("/{ChangeId}", func(w http.ResponseWriter, r *http.Request) {
+		id, err := strconv.Atoi(chi.URLParam(r, "ChangeId"))
+		if err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, fmt.Sprintf("Invalid Change ID %s", chi.URLParam(r, "ChangeId")), http.StatusBadRequest))
+			return
+		}
+		Change := Changemodel.Change{}
+		if err = render.Bind(r, &Change); err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "Bind error", http.StatusBadRequest))
+			return
+		}
+		Change.ID = uint(id)
+		err = db.Delete(&Change)
+		if err == nil {
+			render.JSON(w, r, Change)
+			return
+		}
+		render.Render(w, r, utils.ErrInvalidRequest(err, fmt.Sprintf("Error deleting record for Change  ID %s", chi.URLParam(r, "ChangeId")), http.StatusBadRequest))
+	})
+	return r
+}

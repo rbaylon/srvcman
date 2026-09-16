@@ -27,6 +27,7 @@ package runtimeroutes
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/jwtauth/v5"
@@ -51,18 +52,27 @@ func RuntimeRouter(db runtimemodel.Crud) chi.Router {
 		}
 		render.JSON(w, r, res)
 	})
-	r.Get("/query/{action}", func(w http.ResponseWriter, r *http.Request) {
+	r.Get("/query/{action}/{wid}", func(w http.ResponseWriter, r *http.Request) {
 		val := chi.URLParam(r, "action")
-		rt, err := db.GetByAction(val)
+		wval, werr := strconv.Atoi(chi.URLParam(r, "wid"))
+		if werr != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(werr, "invalid worker id", http.StatusInternalServerError))
+			return
+		}
+		rt, err := db.GetByAction(val, wval)
 		if err != nil {
 			render.Render(w, r, utils.ErrInvalidRequest(err, "DB get error", http.StatusInternalServerError))
 			return
 		}
 		render.JSON(w, r, rt)
 	})
-	r.Get("/delete/{action}", func(w http.ResponseWriter, r *http.Request) {
-		val := chi.URLParam(r, "action")
-		rt, err := db.GetByAction(val)
+	r.Get("/delete/{recordid}", func(w http.ResponseWriter, r *http.Request) {
+		val, rerr := strconv.Atoi(chi.URLParam(r, "recordid"))
+		if rerr != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(rerr, "invalid record id", http.StatusInternalServerError))
+			return
+		}
+		rt, err := db.GetByWorkerId(val)
 		if err != nil {
 			render.Render(w, r, utils.ErrInvalidRequest(err, "DB get error", http.StatusInternalServerError))
 			return
@@ -73,7 +83,6 @@ func RuntimeRouter(db runtimemodel.Crud) chi.Router {
 			return
 		}
 		render.Render(w, r, utils.ErrInvalidRequest(err, "DB delete error", http.StatusInternalServerError))
-		return
 	})
 	r.Post("/create", func(w http.ResponseWriter, r *http.Request) {
 		rt := &runtimemodel.Runtime{}
