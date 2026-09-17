@@ -142,9 +142,8 @@ type Proc struct {
 // per tunnel, so listing N tunnels costs a single arkgated round trip
 // regardless of N.
 func Statuses(tunnels []Tunnel) (map[uint]Proc, error) {
-	procs := map[uint]Proc{}
 	if len(tunnels) == 0 {
-		return procs, nil
+		return map[uint]Proc{}, nil
 	}
 	// -a/-x: include other users' processes and ones with no controlling
 	// terminal (a backgrounded ssh -f has none). -ww: don't truncate the
@@ -152,8 +151,18 @@ func Statuses(tunnels []Tunnel) (map[uint]Proc, error) {
 	// it, and a truncated line would read as "not running".
 	out, err := runViaArk("TunnelPs", psBin, []string{"-axww", "-o", "pid=,etime=,command="})
 	if err != nil {
-		return procs, err
+		return map[uint]Proc{}, err
 	}
+	return parseProcs(out, tunnels), nil
+}
+
+// parseProcs matches `ps -o pid=,etime=,command=` output against tunnels,
+// pairing each tunnel with the ssh process carrying its forwarding
+// argument. Matching on the rendered "-R host:port:host:port" rather than
+// on a recorded pid is what makes this survive a gateway reboot or an ssh
+// that was started by hand: the command line is the tunnel's identity.
+func parseProcs(out string, tunnels []Tunnel) map[uint]Proc {
+	procs := map[uint]Proc{}
 	for _, line := range strings.Split(out, "\n") {
 		fields := strings.Fields(strings.TrimSpace(line))
 		if len(fields) < 3 {
@@ -177,7 +186,7 @@ func Statuses(tunnels []Tunnel) (map[uint]Proc, error) {
 			}
 		}
 	}
-	return procs, nil
+	return procs
 }
 
 // Decorate fills in the Status/Pid/Age fields the API reports for each

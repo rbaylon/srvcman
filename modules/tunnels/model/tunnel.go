@@ -45,6 +45,7 @@ type Tunnel struct {
 	RemotePort int    `json:"remote_port"`
 	LocalIp    string `json:"local_ip"`
 	LocalPort  int    `json:"local_port"`
+	PfconfigID uint   `json:"pfconfig_id"`
 	Status     string `json:"status" gorm:"-"`
 	Pid        int    `json:"pid" gorm:"-"`
 	Age        string `json:"age" gorm:"-"`
