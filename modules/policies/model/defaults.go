@@ -25,6 +25,7 @@ var defaultViewPolicies = []Policy{
 	{Name: "DefaultViewPlans", Type: "plans", Resource: "any", Action: "RO"},
 	{Name: "DefaultViewGatewaymonitor", Type: "gatewaymonitor", Resource: "any", Action: "RO"},
 	{Name: "DefaultViewChanges", Type: "Changes", Resource: "any", Action: "RO"},
+	{Name: "DefaultViewPfconfig", Type: "pfconfig", Resource: "any", Action: "RO"},
 }
 
 // SeedDefaultViewPolicies creates whichever of defaultViewPolicies don't
