@@ -45,6 +45,11 @@ var (
 	// address lists that pair a host with a port using '@' (e.g. unbound's
 	// DNS-over-TLS forward-addr entries like "1.1.1.1@853").
 	safeTokenUpstreamRegex = regexp.MustCompile(`^[A-Za-z0-9./:_,\*@ -]+$`)
+	// phoneRegex allows digits and the punctuation phone numbers are
+	// commonly written with: a leading '+' for the country code, plus
+	// spaces, '-', '(' and ')' as separators. Letters are rejected - this
+	// is a number to dial, not a free-form contact note.
+	phoneRegex = regexp.MustCompile(`^\+?[0-9()\- ]+$`)
 )
 
 func maxLenOrDefault(maxLen int) int {
@@ -182,6 +187,25 @@ func SafeTokenUpstream(field, value string, maxLen int) error {
 	}
 	if !safeTokenUpstreamRegex.MatchString(value) {
 		return fmt.Errorf("%s contains unsupported characters", field)
+	}
+	return nil
+}
+
+// Phone requires value to be empty or a dialable number: digits, an
+// optional leading '+', and ' ', '-', '(' or ')' as separators, up to
+// maxLen characters (MaxStringLen if maxLen <= 0). It deliberately doesn't
+// try to validate the number itself (length, country code, area code) -
+// those vary by country and would reject legitimate entries.
+func Phone(field, value string, maxLen int) error {
+	if value == "" {
+		return nil
+	}
+	maxLen = maxLenOrDefault(maxLen)
+	if len(value) > maxLen {
+		return fmt.Errorf("%s exceeds maximum length of %d characters", field, maxLen)
+	}
+	if !phoneRegex.MatchString(value) {
+		return fmt.Errorf("%s is not a valid contact number", field)
 	}
 	return nil
 }
