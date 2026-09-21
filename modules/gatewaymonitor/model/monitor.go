@@ -376,3 +376,42 @@ func removeRoute(monitorIP string) error {
 	}
 	return nil
 }
+
+// activeHealthChecksCmdTimeout bounds how long GetActiveHealthChecks/
+// ClearActiveHealthChecks wait for arkgated to answer - same value as
+// activeRoutesCmdTimeout, for the same reason: both are administrative
+// queries against arkgated's own connection handler, not exec'd commands
+// with their own timeout, so there is nothing else bounding how long the
+// dial+round-trip could otherwise take.
+const activeHealthChecksCmdTimeout = 15 * time.Second
+
+// GetActiveHealthChecks asks arkgated how many HealthPing connections are
+// currently in flight (and which ones, longest-running first) - the data
+// source for a "stuck health checks" dashboard panel. This is arkgated
+// counting its own in-flight pingOnce connections (see arkgated's
+// arkcommand.Snapshot), not anything tracked locally in srvcman - a
+// restart of srvcman does not lose this, only a restart of arkgated does.
+func GetActiveHealthChecks() (Acmd.ActiveHealthChecksSnapshot, error) {
+	conn := utils.GetArkConn()
+	if conn == nil {
+		return Acmd.ActiveHealthChecksSnapshot{}, fmt.Errorf("arkgated unreachable")
+	}
+	conn.SetDeadline(time.Now().Add(activeHealthChecksCmdTimeout))
+	return Acmd.GetActiveHealthChecks(conn)
+}
+
+// ClearActiveHealthChecks tells arkgated to terminate every currently
+// in-flight HealthPing (killing its whole process group on arkgated's side)
+// and reports how many it cleared - the administrative action behind a
+// dashboard's "clear stuck health checks" button. The pinged gateway is
+// unaffected either way: this only ends arkgated's own health-check
+// connection/process for the pings currently in flight, it does not change
+// monitoring configuration - the next scheduled tick pings again normally.
+func ClearActiveHealthChecks() (int, error) {
+	conn := utils.GetArkConn()
+	if conn == nil {
+		return 0, fmt.Errorf("arkgated unreachable")
+	}
+	conn.SetDeadline(time.Now().Add(activeHealthChecksCmdTimeout))
+	return Acmd.ClearActiveHealthChecks(conn)
+}
