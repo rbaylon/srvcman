@@ -14,11 +14,12 @@ import (
 	changeroutes "github.com/rbaylon/srvcman/modules/changes/routes"
 	collectionmodel "github.com/rbaylon/srvcman/modules/collections/model"
 	collectionroutes "github.com/rbaylon/srvcman/modules/collections/routes"
-	dhcpservermodel "github.com/rbaylon/srvcman/modules/dhcpserver/model"
-	dhcpserverroutes "github.com/rbaylon/srvcman/modules/dhcpserver/routes"
 	dhcpmodel "github.com/rbaylon/srvcman/modules/dhcps/model"
 	dhcproutes "github.com/rbaylon/srvcman/modules/dhcps/routes"
+	dhcpservermodel "github.com/rbaylon/srvcman/modules/dhcpserver/model"
+	dhcpserverroutes "github.com/rbaylon/srvcman/modules/dhcpserver/routes"
 	diagnosticsroutes "github.com/rbaylon/srvcman/modules/diagnostics/routes"
+	fdmonitorroutes "github.com/rbaylon/srvcman/modules/fdmonitor/routes"
 	fwmodel "github.com/rbaylon/srvcman/modules/firewall/model"
 	fwroutes "github.com/rbaylon/srvcman/modules/firewall/routes"
 	gatewaymonitormodel "github.com/rbaylon/srvcman/modules/gatewaymonitor/model"
@@ -183,6 +184,11 @@ var optionalModules = map[string]Module{
 	// billportal app's "billportal" rc.d service.
 	"billportal": {"billportal", func(r chi.Router, db *gorm.DB) {
 		r.Mount("/api/v1/billportal", billportalroutes.BillPortalRouter(db))
+	}},
+	// fdmonitor has no model either - it only reads kern.nfiles/maxfiles
+	// and fstat off the gateway through arkgated.
+	"fdmonitor": {"fdmonitor", func(r chi.Router, db *gorm.DB) {
+		r.Mount("/api/v1/fdmonitor", fdmonitorroutes.FdMonitorRouter(db))
 	}},
 }
 
