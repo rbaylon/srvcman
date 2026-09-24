@@ -26,6 +26,7 @@ type Pfconfig struct {
 	CaptivePortalPort int                    `json:"captive_portal_port"`
 	Router            string                 `json:"router"`
 	LoadBalance       bool                   `json:"load_balance"`
+	PflowEnable       bool                   `json:"pflow_enable"`
 	Vouchers          []vouchermodel.Voucher `json:"vouchers"`
 	Dhcps             []dhcpmodel.Dhcp       `json:"dhcps"`
 	Subs              []submodel.Sub         `json:"subs"`

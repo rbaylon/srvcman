@@ -33,6 +33,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/jwtauth/v5"
 	"github.com/go-chi/render"
+	pfconfig "github.com/rbaylon/srvcman/modules/pfconfig/model"
 	pflowmodel "github.com/rbaylon/srvcman/modules/pflows/model"
 	"github.com/rbaylon/srvcman/modules/security"
 	"github.com/rbaylon/srvcman/utils"
@@ -93,6 +94,19 @@ func PflowRouter(db pflowmodel.Crud) chi.Router {
 		}
 		err := db.Add(&pflow)
 		if err == nil {
+			cfgdb := pfconfig.New(db.GetDB())
+			pfcfg, err := cfgdb.GetById(pflow.PfconfigID)
+			if err != nil {
+				fmt.Println("Failed to load pfconfig")
+				return
+			}
+			if !pfcfg.PflowEnable {
+				pfcfg.PflowEnable = true
+				err := cfgdb.Update(pfcfg)
+				if err != nil {
+					fmt.Println("Failed to set Pflow Enable!")
+				}
+			}
 			render.JSON(w, r, pflow)
 			return
 		}
@@ -112,6 +126,19 @@ func PflowRouter(db pflowmodel.Crud) chi.Router {
 		pflow.ID = uint(id)
 		err = db.Delete(&pflow)
 		if err == nil {
+			cfgdb := pfconfig.New(db.GetDB())
+			pfcfg, err := cfgdb.GetById(pflow.PfconfigID)
+			if err != nil {
+				fmt.Println("Failed to load pfconfig")
+				return
+			}
+			if pfcfg.PflowEnable {
+				pfcfg.PflowEnable = false
+				err := cfgdb.Update(pfcfg)
+				if err != nil {
+					fmt.Println("Failed to set Pflow Enable!")
+				}
+			}
 			render.JSON(w, r, pflow)
 			return
 		}
