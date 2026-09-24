@@ -73,7 +73,7 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 		}
 		pfcmd := Acmd.GetPFcmds("/tmp/")
 		ifchange := false
-		if changes["pfifaces"] > 0 {
+		if changes["pfifaces"] > 0 || changes["pflows"] > 0 {
 			// arkgated generates its own hostname.<if>/mygate files (from
 			// live data it fetches from this API, see
 			// config/pf.ConfigCreate) and does the actual backup/cp/mv into
@@ -81,6 +81,11 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 			// srvcman having written those files locally first, since
 			// srvcman and arkgated may run on separate hosts. Only files
 			// whose content actually changed get promoted/restarted.
+			//
+			// pflows go through the same path: ConfigCreate renders a
+			// hostname.<if> for each pflow device (flowsrc/flowdst/
+			// pflowproto) exactly as it does for a regular interface, so a
+			// pflow edit needs this apply step or it never reaches /etc.
 			ifchange = true
 			applycmd := Acmd.PrepareCmd("ApplyIfaces", "true", []string{})
 			if err := applycmd.SendCmd(utils.GetArkConn()); err != nil {
