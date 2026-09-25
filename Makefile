@@ -1,5 +1,5 @@
 app=srvcman
-distdir=$(HOME)/${app}
+distdir=/usr/local/arkgate/${app}
 
 build:
 	go mod tidy
