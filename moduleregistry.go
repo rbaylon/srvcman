@@ -44,6 +44,8 @@ import (
 	runtimeroutes "github.com/rbaylon/srvcman/modules/runtimes/routes"
 	staticroutesmodel "github.com/rbaylon/srvcman/modules/staticroutes/model"
 	staticroutesroutes "github.com/rbaylon/srvcman/modules/staticroutes/routes"
+	snmpservermodel "github.com/rbaylon/srvcman/modules/snmpserver/model"
+	snmpserverroutes "github.com/rbaylon/srvcman/modules/snmpserver/routes"
 	submodel "github.com/rbaylon/srvcman/modules/subs/model"
 	subroutes "github.com/rbaylon/srvcman/modules/subs/routes"
 	tunnelmodel "github.com/rbaylon/srvcman/modules/tunnels/model"
@@ -139,6 +141,10 @@ var optionalModules = map[string]Module{
 	"unbounddns": {"unbounddns", func(r chi.Router, db *gorm.DB) {
 		unbounddnsmodel.MigrateDB(db)
 		r.Mount("/api/v1/unbounddns", unbounddnsroutes.UnboundDnsRouter(unbounddnsmodel.New(db)))
+	}},
+	"snmpserver": {"snmpserver", func(r chi.Router, db *gorm.DB) {
+		snmpservermodel.MigrateDB(db)
+		r.Mount("/api/v1/snmpserver", snmpserverroutes.SnmpServerRouter(snmpservermodel.New(db)))
 	}},
 	"firewall": {"firewall", func(r chi.Router, db *gorm.DB) {
 		fwmodel.MigrateDB(db)

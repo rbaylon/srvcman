@@ -134,6 +134,32 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 				dhcpcmd["revert"].SendCmd(utils.GetArkConn())
 			}
 		}
+		if changes["snmpserver"] > 0 {
+			// snmpd takes -nf for a config check, the same shape as dhcpd,
+			// so GetServiceCmds works unmodified. Its "check" Arkcmd is
+			// named CheckConf_snmpd, which is what arkgated intercepts to
+			// render /tmp/snmpd.conf before validating it.
+			snmpconf := "/tmp/snmpd.conf"
+			snmpcmd := Acmd.GetServiceCmds("snmpd", "/usr/sbin/snmpd", "/etc/", snmpconf)
+			snmprc := Acmd.GetRcCmds("snmpd")
+			err := snmpcmd["check"].SendCmd(utils.GetArkConn())
+			if err != nil {
+				exeerror := Changemodel.Change{}
+				exeerror.Module = "snmpserver"
+				exeerror.Data = "error in " + snmpconf
+				errors = append(errors, exeerror)
+			}
+			snmpcmd["backup"].SendCmd(utils.GetArkConn())
+			snmpcmd["stage"].SendCmd(utils.GetArkConn())
+			err = snmprc["restart"].SendCmd(utils.GetArkConn())
+			if err != nil {
+				exeerror := Changemodel.Change{}
+				exeerror.Module = "snmpserver"
+				exeerror.Data = "error applying " + snmpconf
+				errors = append(errors, exeerror)
+				snmpcmd["revert"].SendCmd(utils.GetArkConn())
+			}
+		}
 		if changes["unbounddns"] > 0 {
 			unboundconf := "/tmp/unbound.conf"
 			unboundcmd := Acmd.GetServiceCmds("unbound", "/usr/sbin/unbound-checkconf", "/var/unbound/etc/", unboundconf)
