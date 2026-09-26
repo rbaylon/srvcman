@@ -27,15 +27,23 @@ type Pfconfig struct {
 	Router            string                 `json:"router"`
 	LoadBalance       bool                   `json:"load_balance"`
 	PflowEnable       bool                   `json:"pflow_enable"`
-	Vouchers          []vouchermodel.Voucher `json:"vouchers" gorm:"constraint:false"`
-	Dhcps             []dhcpmodel.Dhcp       `json:"dhcps"`
-	Subs              []submodel.Sub         `json:"subs"`
-	Dns               string                 `json:"dns"`
-	Pflows            []pflowmodel.Pflow     `json:"pflows"`
-	Workername        string                 `json:"workername"`
-	Plans             []planmodel.Plan       `json:"plans"`
-	Rules             []fwmodel.Fw           `json:"rules"`
-	Vlans             []vlanmodel.Vlan       `json:"vlans"`
+	// The foreign key on vouchers.pfconfig_id is intentional: pf.conf
+	// generation only ever sees a voucher through this association (see
+	// GetByRouterId's Preload), so a voucher with no valid pfconfig_id is
+	// one that can never reach any router's allowlist. Note the tag that
+	// used to sit here, `constraint:false`, did not disable anything -
+	// gorm only skips the constraint for `constraint:-` (schema/
+	// relationship.go's ParseConstraint), and anything else still creates
+	// it, which is where fk_pfconfigs_vouchers comes from.
+	Vouchers   []vouchermodel.Voucher `json:"vouchers"`
+	Dhcps      []dhcpmodel.Dhcp       `json:"dhcps"`
+	Subs       []submodel.Sub         `json:"subs"`
+	Dns        string                 `json:"dns"`
+	Pflows     []pflowmodel.Pflow     `json:"pflows"`
+	Workername string                 `json:"workername"`
+	Plans      []planmodel.Plan       `json:"plans"`
+	Rules      []fwmodel.Fw           `json:"rules"`
+	Vlans      []vlanmodel.Vlan       `json:"vlans"`
 }
 
 // MigrateDB - Create the table if not exist in DB
