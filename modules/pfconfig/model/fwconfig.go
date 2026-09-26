@@ -27,7 +27,7 @@ type Pfconfig struct {
 	Router            string                 `json:"router"`
 	LoadBalance       bool                   `json:"load_balance"`
 	PflowEnable       bool                   `json:"pflow_enable"`
-	Vouchers          []vouchermodel.Voucher `json:"vouchers"`
+	Vouchers          []vouchermodel.Voucher `json:"vouchers" gorm:"constraint:false"`
 	Dhcps             []dhcpmodel.Dhcp       `json:"dhcps"`
 	Subs              []submodel.Sub         `json:"subs"`
 	Dns               string                 `json:"dns"`
