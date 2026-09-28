@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"os"
+	"sort"
 
 	"github.com/go-chi/chi/v5"
 	"gorm.io/gorm"
@@ -201,6 +202,32 @@ var optionalModules = map[string]Module{
 // ModuleConfig is the shape of the JSON module config file (default: cmd.json).
 type ModuleConfig struct {
 	Modules []string `json:"modules"`
+}
+
+// ActiveModuleNames returns every module name actually mounted in this run:
+// every core module (always on) plus whichever of enabled's names are real
+// entries in optionalModules. An unknown name in the config file is
+// already skipped when mounting (see main.go's loop over enabledModules)
+// rather than trusted as-is, so it's skipped here identically - this list
+// is meant to reflect what this deployment really has running, not every
+// name someone could put in the config file.
+//
+// This backs the /api/v1/modules route, which exists so srvcmanui's policy
+// form can offer exactly the module names a Policy.Type can meaningfully
+// reference, without srvcmanui having to hardcode (and fall out of sync
+// with) srvcman's own module list.
+func ActiveModuleNames(enabled []string) []string {
+	names := make([]string, 0, len(coreModules)+len(enabled))
+	for _, m := range coreModules {
+		names = append(names, m.Name)
+	}
+	for _, name := range enabled {
+		if m, ok := optionalModules[name]; ok {
+			names = append(names, m.Name)
+		}
+	}
+	sort.Strings(names)
+	return names
 }
 
 // LoadModuleNames reads the module config file at path and returns the list

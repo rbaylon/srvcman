@@ -44,7 +44,7 @@ import (
 func ChangeRouter(db Changemodel.Crud) chi.Router {
 	r := chi.NewRouter()
 	dbconn := db.GetDB()
-	r.Use(security.TokenRequired(dbconn, "Changes"))
+	r.Use(security.TokenRequired(dbconn, "changes"))
 
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		res, errdb := db.GetAll()
