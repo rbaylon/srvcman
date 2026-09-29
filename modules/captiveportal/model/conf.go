@@ -28,7 +28,6 @@ func (c *CaptivePortal) ToConf() string {
 		{"API_AUTH", c.ApiAuth},
 		{"ROUTER_ID", c.RouterId},
 		{"ROUTER_INDEX", strconv.Itoa(c.RouterIndex)},
-		{"UNIX_SOCK", c.UnixSock},
 		{"ARKGATE_SOCKET", c.ArkgateSocket},
 		{"ENABLED", strconv.FormatBool(c.Enabled)},
 	} {

@@ -1,6 +1,7 @@
 package security
 
 import (
+	"crypto/subtle"
 	"fmt"
 	"net/http"
 	"strings"
@@ -19,6 +20,17 @@ import (
 )
 
 var secretKey = []byte(database.GetEnvVariable("APP_SECRET"))
+
+// adminUsername/adminPassword are the sole source of the admin account's
+// credentials - it is not a row in the users table (see usermodel.MigrateDB),
+// so Login checks a request against these directly instead of going through
+// usermodel.Crud. validateToken's own admin check is keyed off the literal
+// username "admin", so APP_ADMIN must be set to that for the account to
+// carry full access.
+var (
+	adminUsername = database.GetEnvVariable("APP_ADMIN")
+	adminPassword = database.GetEnvVariable("APP_ADMIN_PW")
+)
 
 type Token struct {
 	Name string
@@ -39,37 +51,48 @@ func Login(db usermodel.Crud) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Println(r.RequestURI, r.Method, r.Header.Get("X-Real-IP"))
 		username, password, ok := r.BasicAuth()
-		if ok {
-			user, err := db.GetByUsername(username)
-			if err != nil {
-				render.Render(w, r, utils.ErrInvalidRequest(err, "DB error", http.StatusInternalServerError))
-				return
-			}
-
-			// If password is plaintext only, use password encryption and store it back to db
-			if user.Password == password {
-				encryptedpassword, err := HashPassword(password)
-				if err != nil {
-					render.Render(w, r, utils.ErrInvalidRequest(err, "Bcrypt Error encrypting password.", http.StatusInternalServerError))
-				}
-				user.Password = encryptedpassword
-				err = db.Update(user)
-				if err != nil {
-					render.Render(w, r, utils.ErrInvalidRequest(err, "DB update error", http.StatusInternalServerError))
-					return
-				}
-				sendtoken(w, r, user.Username)
-				return
-			}
-			// Check already hashed password
-			if CheckPasswordHash(password, user.Password) {
-				sendtoken(w, r, user.Username)
-				return
-			}
-			render.Render(w, r, utils.ErrInvalidRequest(fmt.Errorf("Baisc Auth error"), "Password invalid.", http.StatusUnauthorized))
+		if !ok {
+			render.Render(w, r, utils.ErrInvalidRequest(fmt.Errorf("Baisc Auth error"), "Credentials not found.", http.StatusUnauthorized))
 			return
 		}
-		render.Render(w, r, utils.ErrInvalidRequest(fmt.Errorf("Baisc Auth error"), "Credentials not found.", http.StatusUnauthorized))
+
+		if username == adminUsername {
+			validPassword := adminUsername != "" && subtle.ConstantTimeCompare([]byte(password), []byte(adminPassword)) == 1
+			if !validPassword {
+				render.Render(w, r, utils.ErrInvalidRequest(fmt.Errorf("Baisc Auth error"), "Password invalid.", http.StatusUnauthorized))
+				return
+			}
+			sendtoken(w, r, username)
+			return
+		}
+
+		user, err := db.GetByUsername(username)
+		if err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "DB error", http.StatusInternalServerError))
+			return
+		}
+
+		// If password is plaintext only, use password encryption and store it back to db
+		if user.Password == password {
+			encryptedpassword, err := HashPassword(password)
+			if err != nil {
+				render.Render(w, r, utils.ErrInvalidRequest(err, "Bcrypt Error encrypting password.", http.StatusInternalServerError))
+			}
+			user.Password = encryptedpassword
+			err = db.Update(user)
+			if err != nil {
+				render.Render(w, r, utils.ErrInvalidRequest(err, "DB update error", http.StatusInternalServerError))
+				return
+			}
+			sendtoken(w, r, user.Username)
+			return
+		}
+		// Check already hashed password
+		if CheckPasswordHash(password, user.Password) {
+			sendtoken(w, r, user.Username)
+			return
+		}
+		render.Render(w, r, utils.ErrInvalidRequest(fmt.Errorf("Baisc Auth error"), "Password invalid.", http.StatusUnauthorized))
 	})
 }
 

@@ -28,7 +28,6 @@ type CaptivePortal struct {
 	ApiAuth       string `json:"-"`
 	RouterId      string `json:"router_id"`
 	RouterIndex   int    `json:"router_index"`
-	UnixSock      string `json:"unix_sock"`
 	ArkgateSocket string `json:"arkgate_socket"`
 	Enabled       bool   `json:"enabled"`
 }
@@ -66,9 +65,6 @@ func (a *CaptivePortal) Bind(r *http.Request) error {
 		return err
 	}
 	if err := validate.Int("router_index", a.RouterIndex); err != nil {
-		return err
-	}
-	if err := validate.SafeToken("unix_sock", a.UnixSock, 253); err != nil {
 		return err
 	}
 	return validate.SafeToken("arkgate_socket", a.ArkgateSocket, 253)

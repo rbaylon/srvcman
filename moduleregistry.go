@@ -11,6 +11,7 @@ import (
 
 	acmemodel "github.com/rbaylon/srvcman/modules/acme/model"
 	acmeroutes "github.com/rbaylon/srvcman/modules/acme/routes"
+	billportalmodel "github.com/rbaylon/srvcman/modules/billportal/model"
 	billportalroutes "github.com/rbaylon/srvcman/modules/billportal/routes"
 	captiveportalmodel "github.com/rbaylon/srvcman/modules/captiveportal/model"
 	captiveportalroutes "github.com/rbaylon/srvcman/modules/captiveportal/routes"
@@ -195,10 +196,12 @@ var optionalModules = map[string]Module{
 		captiveportalmodel.MigrateDB(db)
 		r.Mount("/api/v1/captiveportal", captiveportalroutes.CaptivePortalRouter(captiveportalmodel.New(db)))
 	}},
-	// billportal is the same shape as captiveportal, for the separate
-	// billportal app's "billportal" rc.d service.
+	// billportal is the same shape as captiveportal: it both configures
+	// the separate billportal app (rendering its .env, which arkgated
+	// installs) and controls its "billportal" rc.d service via rcctl.
 	"billportal": {"billportal", func(r chi.Router, db *gorm.DB) {
-		r.Mount("/api/v1/billportal", billportalroutes.BillPortalRouter(db))
+		billportalmodel.MigrateDB(db)
+		r.Mount("/api/v1/billportal", billportalroutes.BillPortalRouter(billportalmodel.New(db)))
 	}},
 	// fdmonitor has no model either - it only reads kern.nfiles/maxfiles
 	// and fstat off the gateway through arkgated.
