@@ -12,6 +12,7 @@ import (
 	acmemodel "github.com/rbaylon/srvcman/modules/acme/model"
 	acmeroutes "github.com/rbaylon/srvcman/modules/acme/routes"
 	billportalroutes "github.com/rbaylon/srvcman/modules/billportal/routes"
+	captiveportalmodel "github.com/rbaylon/srvcman/modules/captiveportal/model"
 	captiveportalroutes "github.com/rbaylon/srvcman/modules/captiveportal/routes"
 	changemodel "github.com/rbaylon/srvcman/modules/changes/model"
 	changeroutes "github.com/rbaylon/srvcman/modules/changes/routes"
@@ -187,11 +188,12 @@ var optionalModules = map[string]Module{
 		pflowmodel.MigrateDB(db)
 		r.Mount("/api/v1/pflow", pflowroutes.PflowRouter(pflowmodel.New(db)))
 	}},
-	// captiveportal has no model - like diagnostics, there's nothing to
-	// migrate. It only asks arkgated to rcctl start/stop/restart/check the
-	// separate subsportal app's "captiveportal" rc.d service.
+	// captiveportal both configures the separate subsportal app (rendering
+	// its .env, which arkgated installs) and controls its "captiveportal"
+	// rc.d service via rcctl.
 	"captiveportal": {"captiveportal", func(r chi.Router, db *gorm.DB) {
-		r.Mount("/api/v1/captiveportal", captiveportalroutes.CaptivePortalRouter(db))
+		captiveportalmodel.MigrateDB(db)
+		r.Mount("/api/v1/captiveportal", captiveportalroutes.CaptivePortalRouter(captiveportalmodel.New(db)))
 	}},
 	// billportal is the same shape as captiveportal, for the separate
 	// billportal app's "billportal" rc.d service.
