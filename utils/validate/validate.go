@@ -50,6 +50,14 @@ var (
 	// spaces, '-', '(' and ')' as separators. Letters are rejected - this
 	// is a number to dial, not a free-form contact note.
 	phoneRegex = regexp.MustCompile(`^\+?[0-9()\- ]+$`)
+	// fqdnRegex is a dotted hostname: labels of letters/digits/hyphens that
+	// neither start nor end with a hyphen, at least two of them, no trailing
+	// dot. It is deliberately much stricter than safeTokenRegex, which
+	// permits '/' and would let a value like "../../etc/x" through - an FQDN
+	// is interpolated into file paths (/etc/ssl/<fqdn>.fullchain.pem) and
+	// passed as a command argument, so anything path-shaped has to be
+	// rejected outright rather than escaped later.
+	fqdnRegex = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)+$`)
 )
 
 func maxLenOrDefault(maxLen int) int {
@@ -206,6 +214,27 @@ func Phone(field, value string, maxLen int) error {
 	}
 	if !phoneRegex.MatchString(value) {
 		return fmt.Errorf("%s is not a valid contact number", field)
+	}
+	return nil
+}
+
+// FQDN requires value to be empty or a syntactically valid fully
+// qualified domain name (at least two labels, e.g. "gw.example.com"),
+// at most maxLen characters (MaxStringLen if maxLen <= 0).
+//
+// This is a security boundary, not just a format check: callers build
+// file paths and command arguments out of the result, so a value
+// containing '/', '..', whitespace or a quote must never get through.
+func FQDN(field, value string, maxLen int) error {
+	if value == "" {
+		return nil
+	}
+	maxLen = maxLenOrDefault(maxLen)
+	if len(value) > maxLen {
+		return fmt.Errorf("%s exceeds maximum length of %d characters", field, maxLen)
+	}
+	if !fqdnRegex.MatchString(value) {
+		return fmt.Errorf("%s is not a valid fully qualified domain name", field)
 	}
 	return nil
 }

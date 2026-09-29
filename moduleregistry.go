@@ -9,6 +9,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"gorm.io/gorm"
 
+	acmemodel "github.com/rbaylon/srvcman/modules/acme/model"
+	acmeroutes "github.com/rbaylon/srvcman/modules/acme/routes"
 	billportalroutes "github.com/rbaylon/srvcman/modules/billportal/routes"
 	captiveportalroutes "github.com/rbaylon/srvcman/modules/captiveportal/routes"
 	changemodel "github.com/rbaylon/srvcman/modules/changes/model"
@@ -119,6 +121,10 @@ var coreModules = []Module{
 	// ping/traceroute and returns their output.
 	{"diagnostics", func(r chi.Router, db *gorm.DB) {
 		r.Mount("/api/v1/diagnostics", diagnosticsroutes.DiagnosticsRouter(db))
+	}},
+	{"acme", func(r chi.Router, db *gorm.DB) {
+		acmemodel.MigrateDB(db)
+		r.Mount("/api/v1/acme", acmeroutes.AcmeRouter(acmemodel.New(db)))
 	}},
 }
 
