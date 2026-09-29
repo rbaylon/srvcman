@@ -23,15 +23,21 @@ authority letsencrypt-staging {
 `
 
 // KeyPath is where acme-client writes the private key for fqdn, and
-// FullChainPath the full chain certificate. Both are referenced from
-// acme-client.conf and substituted into nginx.conf, so they are derived
-// in one place rather than formatted at each use.
+// CertPath the full chain certificate. Both are referenced from
+// acme-client.conf, so they are derived in one place rather than
+// formatted at each use.
+//
+// The names are not free choices: relayd's "tls keypair <name>" takes no
+// path arguments at all, it only ever looks for /etc/ssl/<name>.crt and
+// /etc/ssl/private/<name>.key. So the certificate has to be written as
+// <fqdn>.crt - despite holding the full chain - for relayd to find it
+// once the keypair name is set to the FQDN.
 func KeyPath(fqdn string) string {
 	return fmt.Sprintf("/etc/ssl/private/%s.key", fqdn)
 }
 
-func FullChainPath(fqdn string) string {
-	return fmt.Sprintf("/etc/ssl/%s.fullchain.pem", fqdn)
+func CertPath(fqdn string) string {
+	return fmt.Sprintf("/etc/ssl/%s.crt", fqdn)
 }
 
 // ToConf renders a's "domain { ... }" block.
@@ -39,7 +45,7 @@ func (a *Acme) ToConf() string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "domain %s {\n", a.Fqdn)
 	fmt.Fprintf(&b, "\tdomain key \"%s\"\n", KeyPath(a.Fqdn))
-	fmt.Fprintf(&b, "\tdomain full chain certificate \"%s\"\n", FullChainPath(a.Fqdn))
+	fmt.Fprintf(&b, "\tdomain full chain certificate \"%s\"\n", CertPath(a.Fqdn))
 	b.WriteString("\tsign with letsencrypt\n")
 	b.WriteString("}\n")
 	return b.String()
