@@ -2,6 +2,7 @@ package security
 
 import (
 	"crypto/subtle"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -24,13 +25,20 @@ var secretKey = []byte(database.GetEnvVariable("APP_SECRET"))
 // adminUsername/adminPassword are the sole source of the admin account's
 // credentials - it is not a row in the users table (see usermodel.MigrateDB),
 // so Login checks a request against these directly instead of going through
-// usermodel.Crud. validateToken's own admin check is keyed off the literal
-// username "admin", so APP_ADMIN must be set to that for the account to
-// carry full access.
+// usermodel.Crud. Every admin decision - login, token lifetime, full access
+// in validateToken - goes through isAdmin, so the account can be named
+// anything APP_ADMIN says.
 var (
 	adminUsername = database.GetEnvVariable("APP_ADMIN")
 	adminPassword = database.GetEnvVariable("APP_ADMIN_PW")
 )
+
+// isAdmin reports whether username is the .env-configured admin account.
+// An unset APP_ADMIN matches nothing, so an empty username can never be
+// mistaken for the admin.
+func isAdmin(username string) bool {
+	return adminUsername != "" && username == adminUsername
+}
 
 type Token struct {
 	Name string
@@ -56,9 +64,8 @@ func Login(db usermodel.Crud) http.HandlerFunc {
 			return
 		}
 
-		if username == adminUsername {
-			validPassword := adminUsername != "" && subtle.ConstantTimeCompare([]byte(password), []byte(adminPassword)) == 1
-			if !validPassword {
+		if isAdmin(username) {
+			if subtle.ConstantTimeCompare([]byte(password), []byte(adminPassword)) != 1 || adminPassword == "" {
 				render.Render(w, r, utils.ErrInvalidRequest(fmt.Errorf("Baisc Auth error"), "Password invalid.", http.StatusUnauthorized))
 				return
 			}
@@ -67,6 +74,10 @@ func Login(db usermodel.Crud) http.HandlerFunc {
 		}
 
 		user, err := db.GetByUsername(username)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			render.Render(w, r, utils.ErrInvalidRequest(fmt.Errorf("Baisc Auth error"), "Password invalid.", http.StatusUnauthorized))
+			return
+		}
 		if err != nil {
 			render.Render(w, r, utils.ErrInvalidRequest(err, "DB error", http.StatusInternalServerError))
 			return
@@ -129,7 +140,7 @@ func TokenRequired(db *gorm.DB, module string) func(next http.Handler) http.Hand
 
 func createToken(username string) (string, error) {
 	var expiry time.Duration = 1
-	if username == "admin" {
+	if isAdmin(username) {
 		expiry = 8760
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256,
@@ -184,7 +195,7 @@ func validateToken(tokenString string, r *http.Request, db *gorm.DB, module stri
 		if !ok {
 			return fmt.Errorf("Invalid token.")
 		}
-		if username == "admin" {
+		if isAdmin(username) {
 			fmt.Printf("Access granted: %s %s %s from %s\n", username, method, path, remote)
 			data := fmt.Sprintf("%s %s %s %s", path, method, username, remote)
 			if !strings.Contains(method, "GET") {
