@@ -10,6 +10,7 @@ import (
 
 	Acmd "github.com/rbaylon/arkgatecmd"
 	"github.com/rbaylon/srvcman/utils"
+	"github.com/rbaylon/srvcman/utils/validate"
 	"gorm.io/gorm"
 )
 
@@ -63,6 +64,24 @@ func ForwardSpec(t *Tunnel) string {
 	return fmt.Sprintf("%s:%d:%s:%d", t.RemoteIp, t.RemotePort, t.LocalIp, t.LocalPort)
 }
 
+// SshTarget is the host ssh connects to: SshHost when set, otherwise
+// RemoteIp (tunnels created before the two were split).
+func SshTarget(t *Tunnel) string {
+	if t.SshHost != "" {
+		return t.SshHost
+	}
+	return t.RemoteIp
+}
+
+// validateSshHost accepts an IP address or a hostname. It ends up in a
+// shell string, so anything else (including a leading '-') is rejected.
+func validateSshHost(host string) error {
+	if host == "" || net.ParseIP(host) != nil {
+		return nil
+	}
+	return validate.FQDN("ssh_host", host, 253)
+}
+
 // checkSafe re-validates everything that gets interpolated into the ssh
 // command line. Bind already covers the API path, but this also runs for
 // rows written straight to the DB, and the command is assembled as a
@@ -75,6 +94,12 @@ func checkSafe(t *Tunnel) error {
 	}
 	if !utils.IsAlnumStrict(t.RemoteUser) {
 		return fmt.Errorf("tunnel %d: remote_user must be letters and numbers only", t.ID)
+	}
+	if SshTarget(t) == "" {
+		return fmt.Errorf("tunnel %d: ssh_host or remote_ip is required", t.ID)
+	}
+	if err := validateSshHost(t.SshHost); err != nil {
+		return fmt.Errorf("tunnel %d: %w", t.ID, err)
 	}
 	for field, ip := range map[string]string{"remote_ip": t.RemoteIp, "local_ip": t.LocalIp} {
 		if net.ParseIP(ip) == nil {
@@ -91,7 +116,7 @@ func checkSafe(t *Tunnel) error {
 
 // Start establishes t's forward on the gateway:
 //
-//	ssh -o ServerAliveInterval=60 -R|-L <spec> -N -f <user>@<remote_ip>
+//	ssh -o ServerAliveInterval=60 -R|-L <spec> -N -f <user>@<ssh_host|remote_ip>
 //
 // It's run through sh(1) with the standard streams redirected because
 // ssh's -f backgrounds a child that inherits them: left attached to
@@ -106,7 +131,7 @@ func Start(t *Tunnel) error {
 		return err
 	}
 	script := fmt.Sprintf("%s -o ServerAliveInterval=60 %s %s -N -f %s@%s >/dev/null 2>&1 </dev/null",
-		sshBin, forwardFlag(t.Type), ForwardSpec(t), t.RemoteUser, t.RemoteIp)
+		sshBin, forwardFlag(t.Type), ForwardSpec(t), t.RemoteUser, SshTarget(t))
 	if err := sendArkCmd("StartTunnel: "+t.Name, shBin, []string{"-c", script}); err != nil {
 		return fmt.Errorf("ssh %s %s: %w", forwardFlag(t.Type), ForwardSpec(t), err)
 	}

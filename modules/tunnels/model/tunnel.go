@@ -41,6 +41,11 @@ type Tunnel struct {
 	Name       string `json:"name"`
 	Type       string `json:"type"`
 	RemoteUser string `json:"remote_user"`
+	// SshHost is the address ssh connects to (IP or hostname). It is kept
+	// separate from RemoteIp because the real host may sit behind a proxy
+	// or in a VPC (e.g. AWS), so the reachable address differs from the
+	// forward's far end. Empty means "same as RemoteIp".
+	SshHost    string `json:"ssh_host"`
 	RemoteIp   string `json:"remote_ip"`
 	RemotePort int    `json:"remote_port"`
 	LocalIp    string `json:"local_ip"`
@@ -98,6 +103,9 @@ func (a *Tunnel) Bind(r *http.Request) error {
 		return err
 	}
 	if err := validate.Alnum("remote_user", a.RemoteUser, 32); err != nil {
+		return err
+	}
+	if err := validateSshHost(a.SshHost); err != nil {
 		return err
 	}
 	if err := validate.IP("remote_ip", a.RemoteIp); err != nil {
@@ -189,7 +197,7 @@ func (s *Storage) Update(tunnel *Tunnel) error {
 		return result.Error
 	}
 
-	if hasOld && ForwardSpec(&old) == ForwardSpec(tunnel) && old.Type == tunnel.Type && old.RemoteUser == tunnel.RemoteUser {
+	if hasOld && ForwardSpec(&old) == ForwardSpec(tunnel) && SshTarget(&old) == SshTarget(tunnel) && old.Type == tunnel.Type && old.RemoteUser == tunnel.RemoteUser {
 		return nil
 	}
 	if hasOld {
