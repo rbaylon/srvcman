@@ -263,3 +263,51 @@ func StartInactive(db *gorm.DB) (started int, failed int) {
 	}
 	return started, failed
 }
+
+// SshKey is the gateway's tunnel identity: the public half of the key ssh(1)
+// offers when it starts a tunnel, which the operator enrolls on a remote
+// endpoint (authorized_keys) so the tunnel can log in unattended.
+type SshKey struct {
+	PublicKey string `json:"public_key"`
+	// Generated is true when this call had to create the key pair because
+	// none existed yet.
+	Generated bool `json:"generated"`
+}
+
+// sshKeyScript prints "NEW" or "EXISTING" and then the public key,
+// generating an ed25519 pair first when there isn't one. The home directory
+// is resolved with ~root rather than $HOME because arkgated is started from
+// rc.d, where HOME is not reliably set, and ssh(1) itself looks up the
+// identity by the user's passwd entry, not $HOME. The pair is created
+// without a passphrase: a tunnel is started unattended, so one could never
+// be entered.
+const sshKeyScript = `d=$(eval echo ~root)/.ssh; f=$d/id_ed25519
+if [ -f "$f.pub" ]; then echo EXISTING; else
+  mkdir -p -m 700 "$d" && ssh-keygen -q -t ed25519 -N '' -C "arkgate-tunnel@$(hostname)" -f "$f" </dev/null >/dev/null 2>&1 || exit 1
+  echo NEW
+fi
+cat "$f.pub"`
+
+// EnsureSshKey returns the gateway's tunnel public key, generating the key
+// pair on first use. Only the public half ever leaves the gateway.
+func EnsureSshKey() (*SshKey, error) {
+	out, err := runViaArk("TunnelSshKey", shBin, []string{"-c", sshKeyScript})
+	if err != nil {
+		return nil, fmt.Errorf("ssh key: %w", err)
+	}
+	return parseSshKey(out)
+}
+
+// parseSshKey reads sshKeyScript's output: a NEW/EXISTING marker line
+// followed by the public key line.
+func parseSshKey(out string) (*SshKey, error) {
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if len(lines) < 2 {
+		return nil, fmt.Errorf("ssh key: unexpected output %q", strings.TrimSpace(out))
+	}
+	key := strings.TrimSpace(lines[len(lines)-1])
+	if !strings.HasPrefix(key, "ssh-") {
+		return nil, fmt.Errorf("ssh key: output is not a public key")
+	}
+	return &SshKey{PublicKey: key, Generated: strings.TrimSpace(lines[0]) == "NEW"}, nil
+}

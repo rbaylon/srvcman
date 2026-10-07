@@ -17,6 +17,15 @@
 //	            every tunnel that isn't currently running
 //	    Return-Status: 200 on Success
 //
+//	  /api/v1/tunnels/sshkey
+//	    Method: PUT
+//	    Headers: Authorization Bearer
+//	    Return: JSON {"public_key": "<ssh public key>", "generated": <bool>} -
+//	            the gateway's tunnel public key, generated first if none
+//	            exists yet (generated is true then)
+//	    Return-Status: 200 on Success
+//	                   500 if the key couldn't be read or created
+//
 //	  /api/v1/tunnels/<tunnelId>/start
 //	  /api/v1/tunnels/<tunnelId>/stop
 //	    Method: PUT
@@ -71,6 +80,14 @@ func TunnelRouter(db tunnelmodel.Crud) chi.Router {
 	r.Put("/startinactive", func(w http.ResponseWriter, r *http.Request) {
 		started, failed := tunnelmodel.StartInactive(dbconn)
 		render.JSON(w, r, map[string]int{"started": started, "failed": failed})
+	})
+	r.Put("/sshkey", func(w http.ResponseWriter, r *http.Request) {
+		key, err := tunnelmodel.EnsureSshKey()
+		if err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "Failed to get ssh key", http.StatusInternalServerError))
+			return
+		}
+		render.JSON(w, r, key)
 	})
 	r.Get("/{tunnelId}", func(w http.ResponseWriter, r *http.Request) {
 		tunnel, err := lookup(db, r)
