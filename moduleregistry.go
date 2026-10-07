@@ -57,6 +57,8 @@ import (
 	tunnelroutes "github.com/rbaylon/srvcman/modules/tunnels/routes"
 	unbounddnsmodel "github.com/rbaylon/srvcman/modules/unbounddns/model"
 	unbounddnsroutes "github.com/rbaylon/srvcman/modules/unbounddns/routes"
+	updatesmodel "github.com/rbaylon/srvcman/modules/updates/model"
+	updatesroutes "github.com/rbaylon/srvcman/modules/updates/routes"
 	usermodel "github.com/rbaylon/srvcman/modules/users/model"
 	userroutes "github.com/rbaylon/srvcman/modules/users/routes"
 	vlanmodel "github.com/rbaylon/srvcman/modules/vlans/model"
@@ -127,6 +129,10 @@ var coreModules = []Module{
 	{"acme", func(r chi.Router, db *gorm.DB) {
 		acmemodel.MigrateDB(db)
 		r.Mount("/api/v1/acme", acmeroutes.AcmeRouter(acmemodel.New(db)))
+	}},
+	{"updates", func(r chi.Router, db *gorm.DB) {
+		updatesmodel.MigrateDB(db)
+		r.Mount("/api/v1/updates", updatesroutes.UpdatesRouter(db))
 	}},
 }
 
