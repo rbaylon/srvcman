@@ -218,6 +218,30 @@ func Phone(field, value string, maxLen int) error {
 	return nil
 }
 
+// emailRegex is a deliberately conservative address: an unquoted local part
+// of the characters mail systems actually use, '@', then a dotted hostname.
+// It leaves out quoted local parts, comments, display names and IP-literal
+// domains - legal in RFC 5322 but never what a subscriber types, and the
+// ones that could carry whitespace or line breaks. That matters because the
+// address ends up in mail headers, where a CR or LF would let a value
+// inject extra headers.
+var emailRegex = regexp.MustCompile("^[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+(\\.[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+)*@[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)+$")
+
+// Email requires value to be empty or a single plain email address, at most
+// 254 characters with a local part of at most 64 (the RFC 5321 limits).
+func Email(field, value string) error {
+	if value == "" {
+		return nil
+	}
+	if len(value) > 254 {
+		return fmt.Errorf("%s exceeds maximum length of 254 characters", field)
+	}
+	if !emailRegex.MatchString(value) || strings.LastIndex(value, "@") > 64 {
+		return fmt.Errorf("%s is not a valid email address", field)
+	}
+	return nil
+}
+
 // FQDN requires value to be empty or a syntactically valid fully
 // qualified domain name (at least two labels, e.g. "gw.example.com"),
 // at most maxLen characters (MaxStringLen if maxLen <= 0).

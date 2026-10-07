@@ -169,6 +169,10 @@ func SubRouter(db submodel.Crud) chi.Router {
 			render.Render(w, r, utils.ErrInvalidRequest(err, "Bind error", http.StatusBadRequest))
 			return
 		}
+		if err := sub.RequireContactDetails(); err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "Bind error", http.StatusBadRequest))
+			return
+		}
 		erradd := db.Add(sub)
 		if erradd == nil {
 			coldb := collectionmodel.New(db.GetDB())

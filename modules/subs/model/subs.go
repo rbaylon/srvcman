@@ -16,6 +16,7 @@ type Sub struct {
 	FirstName     string `json:"first_name"`
 	LastName      string `json:"last_name"`
 	ContactNumber string `json:"contact_number"`
+	Email         string `json:"email"`
 	FramedIp      string `json:"framed_ip"`
 	Type          string `json:"type"`
 	Status        string `json:"status"`
@@ -53,6 +54,9 @@ func (a *Sub) Bind(r *http.Request) error {
 		return err
 	}
 	if err := validate.Phone("contact_number", a.ContactNumber, 32); err != nil {
+		return err
+	}
+	if err := validate.Email("email", a.Email); err != nil {
 		return err
 	}
 	if err := validate.IP("framed_ip", a.FramedIp); err != nil {
@@ -103,6 +107,26 @@ func (a *Sub) Bind(r *http.Request) error {
 	// Ppppassword is intentionally not charset-restricted, same reasoning as
 	// usermodel.User.Password.
 	return validate.MaxLen("ppppassword", a.Ppppassword, 100)
+}
+
+// RequireContactDetails is the extra check a new subscriber has to pass on
+// top of Bind: the fields needed to bill and reach them must all be filled
+// in. It is separate from Bind because Bind also runs on updates, and
+// subscribers created before email existed have none - requiring it there
+// would stop their records being saved at all.
+func (a *Sub) RequireContactDetails() error {
+	for _, f := range []struct{ name, value string }{
+		{"first_name", a.FirstName},
+		{"last_name", a.LastName},
+		{"framed_ip", a.FramedIp},
+		{"contact_number", a.ContactNumber},
+		{"email", a.Email},
+	} {
+		if err := validate.Required(f.name, f.value); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 type Crud interface {
