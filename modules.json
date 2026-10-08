@@ -7,6 +7,7 @@
     "tunnels",
     "collections",
     "pppoe",
-    "pflow"
+    "pflow",
+    "netblocks"
   ]
 }

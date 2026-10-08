@@ -31,6 +31,8 @@ import (
 	gatewaymonitorroutes "github.com/rbaylon/srvcman/modules/gatewaymonitor/routes"
 	groupmodel "github.com/rbaylon/srvcman/modules/groups/model"
 	grouproutes "github.com/rbaylon/srvcman/modules/groups/routes"
+	netblocksmodel "github.com/rbaylon/srvcman/modules/netblocks/model"
+	netblocksroutes "github.com/rbaylon/srvcman/modules/netblocks/routes"
 	paymentmodel "github.com/rbaylon/srvcman/modules/payments/model"
 	paymentroutes "github.com/rbaylon/srvcman/modules/payments/routes"
 	pfconfigmodel "github.com/rbaylon/srvcman/modules/pfconfig/model"
@@ -172,6 +174,12 @@ var optionalModules = map[string]Module{
 	"tunnels": {"tunnels", func(r chi.Router, db *gorm.DB) {
 		tunnelmodel.MigrateDB(db)
 		r.Mount("/api/v1/tunnels", tunnelroutes.TunnelRouter(tunnelmodel.New(db)))
+	}},
+	// netblocks keeps speedtest network blocks both in the database and in
+	// the gateway's fast.com.blocks file (edited through arkgated).
+	"netblocks": {"netblocks", func(r chi.Router, db *gorm.DB) {
+		netblocksmodel.MigrateDB(db)
+		r.Mount("/api/v1/netblocks", netblocksroutes.NetblocksRouter(db))
 	}},
 	"collections": {"collections", func(r chi.Router, db *gorm.DB) {
 		collectionmodel.MigrateDB(db)
