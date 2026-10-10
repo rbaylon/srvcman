@@ -173,6 +173,8 @@ var optionalModules = map[string]Module{
 	}},
 	"tunnels": {"tunnels", func(r chi.Router, db *gorm.DB) {
 		tunnelmodel.MigrateDB(db)
+		// Keeps tunnels up; only runs while tunnels are on record.
+		tunnelmodel.StartWatchdog(db)
 		r.Mount("/api/v1/tunnels", tunnelroutes.TunnelRouter(tunnelmodel.New(db)))
 	}},
 	// netblocks keeps speedtest network blocks both in the database and in

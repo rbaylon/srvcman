@@ -104,6 +104,14 @@ func TunnelRouter(db tunnelmodel.Crud) chi.Router {
 			render.Render(w, r, utils.ErrInvalidRequest(err, "DB error", http.StatusInternalServerError))
 			return
 		}
+		// Starting is the operator's request for the tunnel to run, so it
+		// is no longer stopped on purpose - recorded first, so that if the
+		// start fails the watchdog keeps trying.
+		if err := tunnelmodel.SetManualStop(dbconn, tunnel.ID, false); err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "DB error", http.StatusInternalServerError))
+			return
+		}
+		tunnel.ManualStop = false
 		if err := tunnelmodel.Start(tunnel); err != nil {
 			render.Render(w, r, utils.ErrInvalidRequest(err, "Failed to start tunnel", http.StatusInternalServerError))
 			return
@@ -116,6 +124,14 @@ func TunnelRouter(db tunnelmodel.Crud) chi.Router {
 			render.Render(w, r, utils.ErrInvalidRequest(err, "DB error", http.StatusInternalServerError))
 			return
 		}
+		// Recorded before the process is killed: otherwise the watchdog
+		// could see it down in between and start it again. The flag is what
+		// keeps a tunnel the operator stopped from being brought back.
+		if err := tunnelmodel.SetManualStop(dbconn, tunnel.ID, true); err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "DB error", http.StatusInternalServerError))
+			return
+		}
+		tunnel.ManualStop = true
 		if err := tunnelmodel.Stop(tunnel); err != nil {
 			render.Render(w, r, utils.ErrInvalidRequest(err, "Failed to stop tunnel", http.StatusInternalServerError))
 			return
@@ -134,6 +150,13 @@ func TunnelRouter(db tunnelmodel.Crud) chi.Router {
 			return
 		}
 		tunnel.ID = uint(id)
+		if dup, derr := tunnelmodel.FindDuplicate(dbconn, &tunnel); derr != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(derr, "DB error", http.StatusInternalServerError))
+			return
+		} else if dup != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(fmt.Errorf("tunnel %q already forwards the same thing", dup.Name), "Duplicate tunnel", http.StatusBadRequest))
+			return
+		}
 		err = db.Update(&tunnel)
 		if err == nil {
 			render.JSON(w, r, tunnel)
@@ -145,6 +168,13 @@ func TunnelRouter(db tunnelmodel.Crud) chi.Router {
 		tunnel := tunnelmodel.Tunnel{}
 		if err := render.Bind(r, &tunnel); err != nil {
 			render.Render(w, r, utils.ErrInvalidRequest(err, "Bind error", http.StatusBadRequest))
+			return
+		}
+		if dup, derr := tunnelmodel.FindDuplicate(dbconn, &tunnel); derr != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(derr, "DB error", http.StatusInternalServerError))
+			return
+		} else if dup != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(fmt.Errorf("tunnel %q already forwards the same thing", dup.Name), "Duplicate tunnel", http.StatusBadRequest))
 			return
 		}
 		err := db.Add(&tunnel)
@@ -160,11 +190,12 @@ func TunnelRouter(db tunnelmodel.Crud) chi.Router {
 			render.Render(w, r, utils.ErrInvalidRequest(err, fmt.Sprintf("Invalid tunnel ID %s", chi.URLParam(r, "tunnelId")), http.StatusBadRequest))
 			return
 		}
+		// No render.Bind here, unlike the other handlers: a DELETE carries
+		// no body, and binding the empty one runs the create-time checks
+		// (name and type required) against nothing, which refused every
+		// delete - so a tunnel that was wrong, or could not connect, could
+		// not be removed.
 		tunnel := tunnelmodel.Tunnel{}
-		if err = render.Bind(r, &tunnel); err != nil {
-			render.Render(w, r, utils.ErrInvalidRequest(err, "Bind error", http.StatusBadRequest))
-			return
-		}
 		tunnel.ID = uint(id)
 		err = db.Delete(&tunnel)
 		if err == nil {

@@ -1,6 +1,7 @@
 package tunnelmodel
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -31,8 +32,20 @@ const arkCmdTimeout = 15 * time.Second
 // which is arkgated's host, not srvcman's.
 func sendArkCmd(name, binpath string, opts []string) error {
 	cmd := Acmd.PrepareCmd(name, binpath, opts)
-	return cmd.SendCmd(utils.GetArkConn())
+	conn := utils.GetArkConn()
+	// Without a deadline a stuck arkgated would hold this call - and, in turn,
+	// everything waiting behind the tunnel lock - for as long as it stays
+	// stuck. Long enough for ssh's own 10s connect limit plus time spent
+	// queued behind other commands.
+	if conn != nil {
+		conn.SetDeadline(time.Now().Add(sendArkTimeout))
+	}
+	return cmd.SendCmd(conn)
 }
+
+// sendArkTimeout bounds one arkgated command that is not expected to return
+// output.
+const sendArkTimeout = 40 * time.Second
 
 // runViaArk dispatches a command to arkgated and returns its output.
 func runViaArk(name, binpath string, opts []string) (string, error) {
@@ -116,7 +129,19 @@ func checkSafe(t *Tunnel) error {
 
 // Start establishes t's forward on the gateway:
 //
-//	ssh -o ServerAliveInterval=60 -R|-L <spec> -N -f <user>@<ssh_host|remote_ip>
+//	ssh -o ServerAliveInterval=60 -o ConnectTimeout=10 -o BatchMode=yes -o ExitOnForwardFailure=yes -R|-L <spec> -N -f <user>@<ssh_host|remote_ip>
+//
+// ConnectTimeout and BatchMode keep a tunnel that cannot come up from
+// holding arkgated's single command queue: an unreachable host would
+// otherwise wait out the system's TCP timeout, and a password prompt has no
+// terminal to be answered on. The tunnel watchdog retries failed tunnels, so
+// a start that cannot succeed has to fail fast.
+//
+// ExitOnForwardFailure makes ssh exit if the forward itself cannot be set up
+// - a local port already in use, or (the common one after a network drop) a
+// remote port still held by the dead session. Without it ssh stays up with no
+// forward, which looks like a running tunnel and is not one, and every retry
+// would add another such process.
 //
 // It's run through sh(1) with the standard streams redirected because
 // ssh's -f backgrounds a child that inherits them: left attached to
@@ -127,21 +152,80 @@ func checkSafe(t *Tunnel) error {
 // Redirecting in the shell hands ssh /dev/null instead, so arkgated sees
 // the parent exit immediately with ssh's real success/failure status.
 func Start(t *Tunnel) error {
+	if err := lockOps(); err != nil {
+		return err
+	}
+	defer unlockOps()
+	return startLocked(t)
+}
+
+// The tunnel lock serializes starting and stopping tunnels. The watchdog
+// starts them in the background while an operator can press Stop at any
+// moment: unserialized, a Stop can look at the process list while a start is
+// half done (the real ssh not yet forked off) and either miss the tunnel or
+// aim at the shell that is launching it.
+//
+// Waiting for it is bounded. A start can be held up behind arkgated's single
+// command queue, and an operator who keeps pressing buttons meanwhile must
+// get "busy" back, not a request parked indefinitely for each press.
+var (
+	opSem      = make(chan struct{}, 1)
+	opLockWait = 45 * time.Second
+	errBusy    = errors.New("another tunnel operation is in progress, try again shortly")
+)
+
+func lockOps() error {
+	timer := time.NewTimer(opLockWait)
+	defer timer.Stop()
+	select {
+	case opSem <- struct{}{}:
+		return nil
+	case <-timer.C:
+		return errBusy
+	}
+}
+
+func unlockOps() { <-opSem }
+
+// startLocked is Start for callers that already hold the tunnel lock.
+//
+// It does nothing if the tunnel is already running. Every path that starts a
+// tunnel funnels through here - the button, Start Inactive, an edit, the
+// watchdog - and each decided to start from a status read that may be a
+// moment old. Checking again under the lock is what stops two of them (an
+// operator's double click racing the watchdog's tick, say) from each starting
+// an ssh for the same forward.
+func startLocked(t *Tunnel) error {
 	if err := checkSafe(t); err != nil {
 		return err
 	}
-	script := fmt.Sprintf("%s -o ServerAliveInterval=60 %s %s -N -f %s@%s >/dev/null 2>&1 </dev/null",
+	if procs, err := procStatuses([]Tunnel{*t}); err == nil {
+		if _, running := procs[t.ID]; running {
+			return nil
+		}
+	}
+	script := fmt.Sprintf("%s -o ServerAliveInterval=60 -o ConnectTimeout=10 -o BatchMode=yes -o ExitOnForwardFailure=yes %s %s -N -f %s@%s >/dev/null 2>&1 </dev/null",
 		sshBin, forwardFlag(t.Type), ForwardSpec(t), t.RemoteUser, SshTarget(t))
-	if err := sendArkCmd("StartTunnel: "+t.Name, shBin, []string{"-c", script}); err != nil {
+	if err := launchProc(t.Name, script); err != nil {
 		return fmt.Errorf("ssh %s %s: %w", forwardFlag(t.Type), ForwardSpec(t), err)
 	}
 	return nil
 }
 
+// launchProc runs script on the gateway; a var so tests can stand in for
+// arkgated.
+var launchProc = func(name, script string) error {
+	return sendArkCmd("StartTunnel: "+name, shBin, []string{"-c", script})
+}
+
 // Stop kills t's ssh process, if it's running. A tunnel that isn't
 // running is not an error - that's the desired end state either way.
 func Stop(t *Tunnel) error {
-	procs, err := Statuses([]Tunnel{*t})
+	if err := lockOps(); err != nil {
+		return err
+	}
+	defer unlockOps()
+	procs, err := procStatuses([]Tunnel{*t})
 	if err != nil {
 		return err
 	}
@@ -149,11 +233,28 @@ func Stop(t *Tunnel) error {
 	if !running {
 		return nil
 	}
-	if err := sendArkCmd("StopTunnel: "+t.Name, killBin, []string{strconv.Itoa(p.Pid)}); err != nil {
+	if err := killProc(t.Name, p.Pid); err != nil {
+		// kill fails if the process is already gone - it exited between the
+		// listing and the kill. That is the state Stop was asked for, not a
+		// failure, so look again before reporting one.
+		if again, e2 := procStatuses([]Tunnel{*t}); e2 == nil {
+			if _, still := again[t.ID]; !still {
+				return nil
+			}
+		}
 		return fmt.Errorf("kill %d: %w", p.Pid, err)
 	}
 	return nil
 }
+
+// procStatuses and killProc are what Stop uses to reach the gateway; vars so
+// tests can stand in for arkgated.
+var (
+	procStatuses = Statuses
+	killProc     = func(name string, pid int) error {
+		return sendArkCmd("StopTunnel: "+name, killBin, []string{strconv.Itoa(pid)})
+	}
+)
 
 // Proc is a running tunnel's process id and how long it's been up, as
 // reported by ps(1) on the gateway.
@@ -178,7 +279,32 @@ func Statuses(tunnels []Tunnel) (map[uint]Proc, error) {
 	if err != nil {
 		return map[uint]Proc{}, err
 	}
+	// A real listing always has init in it. An empty or garbled one would
+	// read as "no tunnel is running", and the watchdog would act on that by
+	// starting a second ssh for every tunnel that is in fact up.
+	if !hasProcessList(out) {
+		return map[uint]Proc{}, fmt.Errorf("process list from arkgated is empty")
+	}
 	return parseProcs(out, tunnels), nil
+}
+
+// hasProcessList reports whether out looks like ps output: at least one line
+// starting with a process id.
+func hasProcessList(out string) bool {
+	for _, line := range strings.Split(out, "\n") {
+		if f := strings.Fields(line); len(f) >= 2 {
+			if _, err := strconv.Atoi(f[0]); err == nil {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// isSshProcess reports whether argv0, the first word of a process's command
+// line, is the ssh client (by full path or bare name).
+func isSshProcess(argv0 string) bool {
+	return argv0 == sshBin || argv0 == "ssh"
 }
 
 // parseProcs matches `ps -o pid=,etime=,command=` output against tunnels,
@@ -198,7 +324,11 @@ func parseProcs(out string, tunnels []Tunnel) map[uint]Proc {
 			continue
 		}
 		command := strings.Join(fields[2:], " ")
-		if !strings.Contains(command, "ssh") {
+		// Only ssh itself. Starting a tunnel runs `/bin/sh -c "ssh ... -f"`,
+		// and for the moment that shell is alive its command line carries the
+		// same forwarding spec - matching it would report a pid that is gone
+		// by the time anything acts on it.
+		if !isSshProcess(fields[2]) {
 			continue
 		}
 		for i := range tunnels {
@@ -253,6 +383,14 @@ func StartInactive(db *gorm.DB) (started int, failed int) {
 	for i := range tunnels {
 		if _, running := procs[tunnels[i].ID]; running {
 			continue
+		}
+		// Pressing "Start Inactive" is the operator asking for these to run,
+		// including any they had stopped by hand, so the watchdog may keep
+		// them up from here on.
+		if tunnels[i].ManualStop {
+			if err := SetManualStop(db, tunnels[i].ID, false); err != nil {
+				log.Println("tunnels: failed to clear manual stop on", tunnels[i].Name, ":", err)
+			}
 		}
 		if err := Start(&tunnels[i]); err != nil {
 			log.Println("tunnels: failed to start tunnel", tunnels[i].Name, ":", err)

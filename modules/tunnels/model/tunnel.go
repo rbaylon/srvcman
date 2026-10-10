@@ -51,9 +51,41 @@ type Tunnel struct {
 	LocalIp    string `json:"local_ip"`
 	LocalPort  int    `json:"local_port"`
 	PfconfigID uint   `json:"pfconfig_id"`
+	// ManualStop is set when the operator stops the tunnel on purpose, and
+	// cleared when they start it again. The watchdog (watchdog.go) restarts
+	// tunnels that are down, and leaves these ones alone. It is changed only
+	// by the start/stop actions, never by an edit: an update from the form
+	// does not carry it.
+	ManualStop bool   `json:"manual_stop" gorm:"not null;default:false"`
 	Status     string `json:"status" gorm:"-"`
 	Pid        int    `json:"pid" gorm:"-"`
 	Age        string `json:"age" gorm:"-"`
+}
+
+// FindDuplicate returns another tunnel that forwards exactly what t does -
+// same direction and forwarding spec - or nil.
+//
+// Tunnels are recognised on the gateway by that spec alone (see parseProcs),
+// so two records for one forward are the same ssh process: they would show
+// the same status, deleting either would stop the other's forward, and the
+// second could never be started because the first already holds the port. It
+// is refused up front rather than left to confuse later.
+func FindDuplicate(db *gorm.DB, t *Tunnel) (*Tunnel, error) {
+	var all []Tunnel
+	if err := db.Find(&all).Error; err != nil {
+		return nil, err
+	}
+	return findDuplicate(all, t), nil
+}
+
+func findDuplicate(all []Tunnel, t *Tunnel) *Tunnel {
+	for i := range all {
+		o := &all[i]
+		if o.ID != t.ID && forwardFlag(o.Type) == forwardFlag(t.Type) && ForwardSpec(o) == ForwardSpec(t) {
+			return o
+		}
+	}
+	return nil
 }
 
 type Tunnels struct {
@@ -164,6 +196,10 @@ func (s *Storage) Add(tunnel *Tunnel) error {
 	if err := Start(tunnel); err != nil {
 		log.Println("tunnels: failed to start tunnel", tunnel.Name, ":", err)
 	}
+	// The watchdog only runs while tunnels exist, so this is what starts it
+	// for the first one. It also retries this tunnel if the start above
+	// failed.
+	StartWatchdog(s.DB)
 	return nil
 }
 
@@ -192,6 +228,12 @@ func (s *Storage) Update(tunnel *Tunnel) error {
 	var old Tunnel
 	hasOld := s.DB.First(&old, tunnel.ID).Error == nil
 
+	// A form edit does not carry ManualStop, so without this Save would
+	// reset it and the watchdog would bring back a tunnel the operator
+	// stopped.
+	if hasOld {
+		tunnel.ManualStop = old.ManualStop
+	}
 	result := s.DB.Save(tunnel)
 	if result.Error != nil {
 		return result.Error
@@ -204,6 +246,14 @@ func (s *Storage) Update(tunnel *Tunnel) error {
 		if err := Stop(&old); err != nil {
 			log.Println("tunnels: failed to stop old tunnel", old.Name, ":", err)
 		}
+	}
+	// Changing the settings of a stopped tunnel starts it with the new ones
+	// (above), so it is no longer stopped on purpose.
+	if tunnel.ManualStop {
+		if err := SetManualStop(s.DB, tunnel.ID, false); err != nil {
+			log.Println("tunnels: failed to clear manual stop on", tunnel.Name, ":", err)
+		}
+		tunnel.ManualStop = false
 	}
 	if err := Start(tunnel); err != nil {
 		log.Println("tunnels: failed to restart tunnel", tunnel.Name, ":", err)
