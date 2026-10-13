@@ -22,6 +22,9 @@ const (
 type Calls struct {
 	Send   func(*Acmd.Arkcmd) error
 	Output func(*Acmd.Arkcmd) (string, error)
+	// Records says how many PPPoE servers are configured. Zero means npppd has
+	// nothing to serve and is switched off; nil is treated as "some".
+	Records func() (int, error)
 }
 
 // Npppd installs the PPPoE configuration srvcman has rendered and
@@ -42,6 +45,9 @@ type Calls struct {
 // means the service comes back after a reboot. The new file is fetched from
 // srvcman by arkgated as part of the first step ("BackupConf_npppd"), so if
 // that fetch fails there is nothing to install and the install step fails.
+//
+// With no PPPoE servers left (Calls.Records is zero) it stops and disables
+// npppd instead of installing anything.
 func Npppd(c Calls) []Changemodel.Change {
 	var errs []Changemodel.Change
 	fail := func(data string) {
@@ -50,8 +56,45 @@ func Npppd(c Calls) []Changemodel.Change {
 	cmds := Acmd.GetServiceCmds("npppd", npppdBin, npppdDir, npppdStaged)
 	rc := Acmd.GetRcCmds("npppd")
 
+	if c.Records != nil {
+		n, err := c.Records()
+		if err != nil {
+			fail("could not count the PPPoE servers: " + err.Error())
+			return errs
+		}
+		if n == 0 {
+			// Nothing left to serve: npppd has no tunnel to run and would
+			// refuse an empty configuration, so stop it and keep it from
+			// starting at boot. The installed file is left as it was; it is
+			// replaced the next time a server is added. A stop that fails
+			// only means it was not running.
+			_ = c.Send(rc["stop"])
+			if err := c.Send(rc["disable"]); err != nil {
+				fail("npppd was stopped but could not be disabled at boot")
+			}
+			return errs
+		}
+	}
+
 	// There is no previous file the first time; failing here is expected then.
 	_ = c.Send(cmds["backup"])
+
+	// A change that renders the same configuration (a re-save, an edit that
+	// only touched something npppd does not read) must not restart npppd:
+	// that drops every PPPoE session. The file fetched in the step above is
+	// compared with the installed one, which the backup step has just moved to
+	// the ".prev" name; only a running service is left alone.
+	same := Acmd.PrepareCmd("CompareConf_npppd", "/usr/bin/cmp", []string{"-s", npppdStaged, npppdLiveConf + ".prev"})
+	if _, err := c.Output(same); err == nil {
+		_ = c.Send(cmds["revert"]) // put the installed file back
+		_ = c.Send(rc["enable"])
+		if _, err := c.Output(rc["status"]); err != nil {
+			if err := c.Send(rc["restart"]); err != nil {
+				fail("npppd is not running and could not be started")
+			}
+		}
+		return errs
+	}
 
 	if err := c.Send(cmds["stage"]); err != nil {
 		fail("could not install the new npppd.conf - srvcman's configuration could not be fetched or moved into " + npppdDir)

@@ -14,6 +14,7 @@ type gateway struct {
 	log      []string
 	failName map[string]int // command name -> how many times it fails (0 = never)
 	checkOut string
+	same     bool // the staged config is identical to the installed one
 }
 
 func (g *gateway) record(c *Acmd.Arkcmd) string {
@@ -32,6 +33,9 @@ func (g *gateway) send(c *Acmd.Arkcmd) error {
 
 func (g *gateway) output(c *Acmd.Arkcmd) (string, error) {
 	name := g.record(c)
+	if name == "CompareConf_npppd" && !g.same {
+		return "", errors.New("differ")
+	}
 	if n := g.failName[name]; n > 0 {
 		g.failName[name] = n - 1
 		return g.checkOut, errors.New("exit status 1")
@@ -49,7 +53,7 @@ func TestAGoodConfigIsInstalledCheckedRestartedAndEnabled(t *testing.T) {
 	if len(errs) != 0 {
 		t.Fatalf("errors on a clean apply: %+v", errs)
 	}
-	want := "BackupConf_npppd > StageConf_npppd > CheckInstalled_npppd > Enable_npppd > Restart_npppd"
+	want := "BackupConf_npppd > CompareConf_npppd > StageConf_npppd > CheckInstalled_npppd > Enable_npppd > Restart_npppd"
 	if got := g.sequence(); got != want {
 		t.Errorf("sequence\n got  %s\n want %s", got, want)
 	}
@@ -109,7 +113,7 @@ func TestAFailedRestartRestoresTheOldConfigAndStartsNpppdAgain(t *testing.T) {
 	if len(errs) != 1 {
 		t.Fatalf("errors = %+v, want exactly the restart failure (the second restart worked)", errs)
 	}
-	want := "BackupConf_npppd > StageConf_npppd > CheckInstalled_npppd > Enable_npppd > Restart_npppd > RevertConf_npppd > Restart_npppd"
+	want := "BackupConf_npppd > CompareConf_npppd > StageConf_npppd > CheckInstalled_npppd > Enable_npppd > Restart_npppd > RevertConf_npppd > Restart_npppd"
 	if got := g.sequence(); got != want {
 		t.Errorf("sequence\n got  %s\n want %s", got, want)
 	}
@@ -148,3 +152,78 @@ func TestEnableComesBeforeTheRestartAndIsNotFatal(t *testing.T) {
 }
 
 func applyNpppdFor(g *gateway) []Changemodel.Change { return Npppd(g.calls()) }
+
+func TestNoPppoeServersLeftStopsAndDisablesNpppd(t *testing.T) {
+	g := &gateway{failName: map[string]int{}}
+	c := g.calls()
+	c.Records = func() (int, error) { return 0, nil }
+	if errs := Npppd(c); len(errs) != 0 {
+		t.Fatalf("errors: %+v", errs)
+	}
+	if got, want := g.sequence(), "Stop_npppd > Disable_npppd"; got != want {
+		t.Errorf("sequence: got %s, want %s", got, want)
+	}
+}
+
+func TestNpppdAlreadyStoppedStillGetsDisabled(t *testing.T) {
+	g := &gateway{failName: map[string]int{"Stop_npppd": 1}}
+	c := g.calls()
+	c.Records = func() (int, error) { return 0, nil }
+	if errs := Npppd(c); len(errs) != 0 {
+		t.Fatalf("errors: %+v", errs)
+	}
+	if !strings.Contains(g.sequence(), "Disable_npppd") {
+		t.Errorf("not disabled: %s", g.sequence())
+	}
+}
+
+func TestAFailedDisableIsReported(t *testing.T) {
+	g := &gateway{failName: map[string]int{"Disable_npppd": 1}}
+	c := g.calls()
+	c.Records = func() (int, error) { return 0, nil }
+	if errs := Npppd(c); len(errs) != 1 {
+		t.Fatalf("want one error, got %+v", errs)
+	}
+}
+
+func TestWithServersTheFirstConfigurationIsEnabledBeforeItStarts(t *testing.T) {
+	g := &gateway{failName: map[string]int{"BackupConf_npppd": 1}}
+	c := g.calls()
+	c.Records = func() (int, error) { return 2, nil }
+	if errs := Npppd(c); len(errs) != 0 {
+		t.Fatalf("errors: %+v", errs)
+	}
+	seq := g.sequence()
+	if strings.Contains(seq, "Disable_npppd") || strings.Index(seq, "Enable_npppd") > strings.Index(seq, "Restart_npppd") {
+		t.Errorf("bad order: %s", seq)
+	}
+}
+
+func TestACountFailureTouchesNothing(t *testing.T) {
+	g := &gateway{failName: map[string]int{}}
+	c := g.calls()
+	c.Records = func() (int, error) { return 0, errors.New("db down") }
+	if errs := Npppd(c); len(errs) != 1 || g.sequence() != "" {
+		t.Fatalf("errs=%+v seq=%q", errs, g.sequence())
+	}
+}
+
+func TestAnIdenticalConfigDoesNotRestartARunningNpppd(t *testing.T) {
+	g := &gateway{failName: map[string]int{}, same: true}
+	if errs := Npppd(g.calls()); len(errs) != 0 {
+		t.Fatalf("errors: %+v", errs)
+	}
+	if seq := g.sequence(); strings.Contains(seq, "Restart_npppd") || strings.Contains(seq, "StageConf_npppd") {
+		t.Errorf("touched npppd for an identical config: %s", seq)
+	}
+}
+
+func TestAnIdenticalConfigStillStartsAStoppedNpppd(t *testing.T) {
+	g := &gateway{failName: map[string]int{"Status_npppd": 1}, same: true}
+	if errs := Npppd(g.calls()); len(errs) != 0 {
+		t.Fatalf("errors: %+v", errs)
+	}
+	if !strings.Contains(g.sequence(), "Restart_npppd") {
+		t.Errorf("stopped npppd left stopped: %s", g.sequence())
+	}
+}

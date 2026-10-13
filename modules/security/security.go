@@ -11,6 +11,7 @@ import (
 	"github.com/golang-jwt/jwt"
 	"gorm.io/gorm"
 
+	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/render"
 	"github.com/rbaylon/srvcman/database"
 	changemodel "github.com/rbaylon/srvcman/modules/changes/model"
@@ -128,12 +129,23 @@ func TokenRequired(db *gorm.DB, module string) func(next http.Handler) http.Hand
 			}
 			//fmt.Println(reqtoken)
 			token := reqtoken[len("Bearer "):]
-			err := validateToken(token, r, db, module)
+			audit, err := validateToken(token, r, db, module)
 			if err != nil {
 				render.Render(w, r, utils.ErrInvalidRequest(err, "Invalid token", http.StatusUnauthorized))
 				return
 			}
-			next.ServeHTTP(w, r)
+			if audit == nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+			// A change is only recorded as pending once the request has been
+			// accepted: a refused or failed one changed nothing, and listing it
+			// made the operator apply (and npppd restart) for no reason.
+			ww := chimw.NewWrapResponseWriter(w, r.ProtoMajor)
+			next.ServeHTTP(ww, r)
+			if st := ww.Status(); st == 0 || st < 400 {
+				audit()
+			}
 		})
 	}
 }
@@ -157,7 +169,10 @@ func createToken(username string) (string, error) {
 	return tokenString, nil
 }
 
-func validateToken(tokenString string, r *http.Request, db *gorm.DB, module string) error {
+// validateToken authorises the request. For one that modifies data it also
+// returns the function that records it in the audit trail, for the caller to
+// run once the request has succeeded.
+func validateToken(tokenString string, r *http.Request, db *gorm.DB, module string) (func(), error) {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		// createToken only ever signs with HS256 - reject anything else
 		// up front instead of relying on the keyfunc always handing back
@@ -174,10 +189,10 @@ func validateToken(tokenString string, r *http.Request, db *gorm.DB, module stri
 		return secretKey, nil
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !token.Valid {
-		return fmt.Errorf("Invalid token.")
+		return nil, fmt.Errorf("Invalid token.")
 	}
 	method := r.Method
 	path := r.RequestURI
@@ -193,15 +208,15 @@ func validateToken(tokenString string, r *http.Request, db *gorm.DB, module stri
 		// crash request handling.
 		username, ok = claims["username"].(string)
 		if !ok {
-			return fmt.Errorf("Invalid token.")
+			return nil, fmt.Errorf("Invalid token.")
 		}
 		if isAdmin(username) {
 			fmt.Printf("Access granted: %s %s %s from %s\n", username, method, path, remote)
 			data := fmt.Sprintf("%s %s %s %s", path, method, username, remote)
 			if !strings.Contains(method, "GET") {
-				audittrail(data, module, db)
+				return func() { audittrail(data, module, db) }, nil
 			}
-			return nil
+			return nil, nil
 		}
 		// userdata/poldata errors (a DB hiccup, or a stale JWT for a
 		// since-deleted user) used to be silently ignored here, and
@@ -249,15 +264,15 @@ func validateToken(tokenString string, r *http.Request, db *gorm.DB, module stri
 	}
 	if deny {
 		fmt.Printf("Access denied: %s %s %s from %s\n", username, method, path, remote)
-		return fmt.Errorf("Access denied.")
+		return nil, fmt.Errorf("Access denied.")
 	}
 	fmt.Printf("Access granted: %s %s %s from %s\n", username, method, path, remote)
 	data := fmt.Sprintf("%s %s %s %s", path, method, username, remote)
 	if !strings.Contains(method, "GET") {
-		audittrail(data, module, db)
+		return func() { audittrail(data, module, db) }, nil
 	}
 
-	return nil
+	return nil, nil
 }
 
 func audittrail(data string, module string, db *gorm.DB) {

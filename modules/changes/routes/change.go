@@ -42,7 +42,7 @@ import (
 
 //var tokenAuth *jwtauth.JWTAuth
 
-func ChangeRouter(db Changemodel.Crud) chi.Router {
+func ChangeRouter(db Changemodel.Crud, pppoeRecords func() (int, error)) chi.Router {
 	r := chi.NewRouter()
 	dbconn := db.GetDB()
 	r.Use(security.TokenRequired(dbconn, "changes"))
@@ -192,6 +192,7 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 				Output: func(c *Acmd.Arkcmd) (string, error) {
 					return c.SendCmdOutput(utils.GetArkConn())
 				},
+				Records: pppoeRecords,
 			})...)
 		}
 		//utils.GetArkConn()

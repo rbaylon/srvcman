@@ -122,7 +122,10 @@ var coreModules = []Module{
 	}},
 	{"changes", func(r chi.Router, db *gorm.DB) {
 		changemodel.MigrateDB(db)
-		r.Mount("/api/v1/changes", changeroutes.ChangeRouter(changemodel.New(db)))
+		r.Mount("/api/v1/changes", changeroutes.ChangeRouter(changemodel.New(db), func() (int, error) {
+			all, err := pppoemodel.New(db).GetAll()
+			return len(all), err
+		}))
 	}},
 	// diagnostics has no model - nothing to migrate, it just triggers
 	// ping/traceroute and returns their output.
