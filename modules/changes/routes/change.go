@@ -34,6 +34,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
 	Acmd "github.com/rbaylon/arkgatecmd"
+	changeapply "github.com/rbaylon/srvcman/modules/changes/apply"
 	Changemodel "github.com/rbaylon/srvcman/modules/changes/model"
 	"github.com/rbaylon/srvcman/modules/security"
 	"github.com/rbaylon/srvcman/utils"
@@ -96,20 +97,23 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 		if changes["subs"] > 0 || changes["firewall"] > 0 || ifchange {
 			err := pfcmd["check"].SendCmd(utils.GetArkConn())
 			if err != nil {
+				// a rule set that fails its syntax check is never
+				// installed; the running /etc/pf.conf stays as it was
 				exeerror := Changemodel.Change{}
 				exeerror.Module = "subs"
 				exeerror.Data = "error in /tmp/pf.conf"
 				errors = append(errors, exeerror)
-			}
-			pfcmd["backup"].SendCmd(utils.GetArkConn())
-			pfcmd["move"].SendCmd(utils.GetArkConn())
-			err = pfcmd["apply"].SendCmd(utils.GetArkConn())
-			if err != nil {
-				exeerror := Changemodel.Change{}
-				exeerror.Module = "subs"
-				exeerror.Data = "error applying /tmp/pf.conf"
-				errors = append(errors, exeerror)
-				pfcmd["revert"].SendCmd(utils.GetArkConn())
+			} else {
+				pfcmd["backup"].SendCmd(utils.GetArkConn())
+				pfcmd["move"].SendCmd(utils.GetArkConn())
+				err = pfcmd["apply"].SendCmd(utils.GetArkConn())
+				if err != nil {
+					exeerror := Changemodel.Change{}
+					exeerror.Module = "subs"
+					exeerror.Data = "error applying /tmp/pf.conf"
+					errors = append(errors, exeerror)
+					pfcmd["revert"].SendCmd(utils.GetArkConn())
+				}
 			}
 		}
 		if changes["dhcpserver"] > 0 {
@@ -183,21 +187,12 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 			}
 		}
 		if changes["pppoes"] > 0 {
-			npppdconf := "/tmp/npppd.conf"
-			// npppd has no built-in config-validate mode (unlike pfctl -nf
-			// or unbound-checkconf), so there's no "check" step here.
-			npppdcmd := Acmd.GetServiceCmds("npppd", "", "/etc/npppd/", npppdconf)
-			npppdrc := Acmd.GetRcCmds("npppd")
-			npppdcmd["backup"].SendCmd(utils.GetArkConn())
-			npppdcmd["stage"].SendCmd(utils.GetArkConn())
-			err := npppdrc["restart"].SendCmd(utils.GetArkConn())
-			if err != nil {
-				exeerror := Changemodel.Change{}
-				exeerror.Module = "pppoes"
-				exeerror.Data = "error applying " + npppdconf
-				errors = append(errors, exeerror)
-				npppdcmd["revert"].SendCmd(utils.GetArkConn())
-			}
+			errors = append(errors, changeapply.Npppd(changeapply.Calls{
+				Send: func(c *Acmd.Arkcmd) error { return c.SendCmd(utils.GetArkConn()) },
+				Output: func(c *Acmd.Arkcmd) (string, error) {
+					return c.SendCmdOutput(utils.GetArkConn())
+				},
+			})...)
 		}
 		//utils.GetArkConn()
 		render.JSON(w, r, errors)

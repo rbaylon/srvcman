@@ -52,6 +52,7 @@
 package pppoeroutes
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -186,6 +187,11 @@ func PppoeRouter(db pppoemodel.Crud) chi.Router {
 			render.JSON(w, r, pppoe)
 			return
 		}
+		var refused *pppoemodel.Refused
+		if errors.As(err, &refused) {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "Not accepted", http.StatusBadRequest))
+			return
+		}
 		render.Render(w, r, utils.ErrInvalidRequest(err, "DB error", http.StatusInternalServerError))
 	})
 	r.Delete("/{pppoeId}", func(w http.ResponseWriter, r *http.Request) {
@@ -194,11 +200,10 @@ func PppoeRouter(db pppoemodel.Crud) chi.Router {
 			render.Render(w, r, utils.ErrInvalidRequest(err, fmt.Sprintf("Invalid pppoe ID %s", chi.URLParam(r, "pppoeId")), http.StatusBadRequest))
 			return
 		}
+		// No render.Bind: a DELETE has no body, and binding the empty one would
+		// run the create-time checks against nothing. The model loads the stored
+		// record from the ID.
 		pppoe := pppoemodel.Pppoe{}
-		if err = render.Bind(r, &pppoe); err != nil {
-			render.Render(w, r, utils.ErrInvalidRequest(err, "Bind error", http.StatusBadRequest))
-			return
-		}
 		pppoe.ID = uint(id)
 		err = db.Delete(&pppoe)
 		if err == nil {
