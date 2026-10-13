@@ -43,6 +43,7 @@ import (
 	pflowroutes "github.com/rbaylon/srvcman/modules/pflows/routes"
 	planmodel "github.com/rbaylon/srvcman/modules/plans/model"
 	planroutes "github.com/rbaylon/srvcman/modules/plans/routes"
+	powerroutes "github.com/rbaylon/srvcman/modules/power/routes"
 	policymodel "github.com/rbaylon/srvcman/modules/policies/model"
 	policyroutes "github.com/rbaylon/srvcman/modules/policies/routes"
 	pppoemodel "github.com/rbaylon/srvcman/modules/pppoes/model"
@@ -131,6 +132,11 @@ var coreModules = []Module{
 	{"acme", func(r chi.Router, db *gorm.DB) {
 		acmemodel.MigrateDB(db)
 		r.Mount("/api/v1/acme", acmeroutes.AcmeRouter(acmemodel.New(db)))
+	}},
+	// power has no model - it only asks arkgated to restart or shut down the
+	// gateway, and each request must carry its own confirmation.
+	{"power", func(r chi.Router, db *gorm.DB) {
+		r.Mount("/api/v1/power", powerroutes.PowerRouter(db))
 	}},
 	{"updates", func(r chi.Router, db *gorm.DB) {
 		updatesmodel.MigrateDB(db)
