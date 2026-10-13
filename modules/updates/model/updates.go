@@ -45,9 +45,27 @@ const (
 //
 // UpdateServer is the base URL of the server the product's components are
 // updated from. It is empty until an operator sets one.
+//
+// The rest is the software update state of this box: Product is the product
+// slug asked for at the update server (empty means DefaultProduct), ApiToken
+// is the API token created on the website (never sent back to a client: see
+// the routes), and the Installed* and Job* fields record the last update that
+// was applied and the one in progress (see job.go).
 type Updates struct {
 	gorm.Model
 	UpdateServer string `json:"update_server"`
+	Product      string `json:"product"`
+	ApiToken     string `json:"-"`
+
+	InstalledVersion string     `json:"-"`
+	InstalledAt      *time.Time `json:"-"`
+
+	JobID        string     `json:"-"`
+	JobVersion   string     `json:"-"`
+	JobStartedAt *time.Time `json:"-"`
+	// JobRecorded is set once the outcome of JobID has been folded into
+	// InstalledVersion, so a job is counted once however often it is read.
+	JobRecorded bool `json:"-"`
 }
 
 // MigrateDB - Create the table if not exist in DB
@@ -122,6 +140,47 @@ func Save(db *gorm.DB, server string) (*Updates, error) {
 	u.UpdateServer = server
 	// Save (rather than Updates) so that clearing the field back to the
 	// empty string persists - Updates skips zero values.
+	if err := db.Save(u).Error; err != nil {
+		return nil, err
+	}
+	return u, nil
+}
+
+// Store is where the update settings and job record are kept. The gorm-backed
+// one (GormStore) is what srvcman uses; the job logic only needs this much,
+// which also keeps it testable without a database.
+type Store interface {
+	Load() (*Updates, error)
+	Save(*Updates) error
+}
+
+// GormStore keeps the settings in the database.
+type GormStore struct{ DB *gorm.DB }
+
+// Load returns the single settings row, or an empty one when none is saved yet.
+func (g GormStore) Load() (*Updates, error) { return Get(g.DB) }
+
+// Save writes the settings row (creating it on first use).
+func (g GormStore) Save(u *Updates) error { return g.DB.Save(u).Error }
+
+// SaveSettings stores the update server and, when given, the product and
+// the API token. A nil product or token leaves the stored value alone; an
+// empty product resets to the default, and clearToken removes the token.
+func SaveSettings(db *gorm.DB, server string, product, token *string, clearToken bool) (*Updates, error) {
+	u, err := Get(db)
+	if err != nil {
+		return nil, err
+	}
+	u.UpdateServer = server
+	if product != nil {
+		u.Product = *product
+	}
+	switch {
+	case clearToken:
+		u.ApiToken = ""
+	case token != nil && *token != "":
+		u.ApiToken = *token
+	}
 	if err := db.Save(u).Error; err != nil {
 		return nil, err
 	}
