@@ -134,7 +134,9 @@ func TokenRequired(db *gorm.DB, module string) func(next http.Handler) http.Hand
 				render.Render(w, r, utils.ErrInvalidRequest(err, "Invalid token", http.StatusUnauthorized))
 				return
 			}
-			if audit == nil {
+			// The changes module is the list itself: applying it must not leave a
+			// new pending entry about the apply.
+			if audit == nil || module == "changes" {
 				next.ServeHTTP(w, r)
 				return
 			}

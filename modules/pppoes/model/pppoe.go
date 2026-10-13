@@ -28,6 +28,7 @@ func MigrateDB(db *gorm.DB) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	repairRouter(db)
 }
 
 // Bind interface as required by go-chi/render
@@ -106,6 +107,12 @@ func (s *Storage) Add(pppoe *Pppoe) error {
 	presult := s.DB.Where("Device = ?", pppoe.Device).First(&parentdevice)
 	if presult.Error != nil {
 		return refuse("no firewall interface uses device %q", pppoe.Device)
+	}
+	// The form does not carry the router: a server belongs to the router of the
+	// interface it listens on. Without it the server's own interface is
+	// attached to no router and is missing from the router's interface list.
+	if pppoe.PfconfigID == 0 {
+		pppoe.PfconfigID = parentdevice.PfconfigID
 	}
 	var pppoes []Pppoe
 	res := s.DB.Find(&pppoes)
@@ -213,6 +220,12 @@ func (s *Storage) Update(pppoe *Pppoe) error {
 	if pppoe.PfconfigID == 0 {
 		pppoe.PfconfigID = existing.PfconfigID
 	}
+	if pppoe.PfconfigID == 0 {
+		parent := pfifacemodel.Pfiface{}
+		if s.DB.Where("device = ?", pppoe.Device).First(&parent).Error == nil {
+			pppoe.PfconfigID = parent.PfconfigID
+		}
+	}
 	pfiface := pfifacemodel.Pfiface{}
 	presult := s.DB.Where("Device = ?", fmt.Sprintf("pppac%d", pppoe.DevIndex)).First(&pfiface)
 	if presult.Error != nil {
@@ -225,9 +238,17 @@ func (s *Storage) Update(pppoe *Pppoe) error {
 		if clash > 0 {
 			return refuse("the name %q is already used by a firewall interface", pppoe.Name)
 		}
+		if pfiface.Name != pppoe.Name {
+			if n, err := s.subscribersOn(pfiface.Name); err != nil {
+				return err
+			} else if n > 0 {
+				return refuse("%d subscriber(s) use %s; remove them before renaming the server", n, pfiface.Name)
+			}
+		}
 		pfiface.Ip = pppoe.Ip
 		pfiface.Name = pppoe.Name
 		pfiface.Netmask = pppacNetmask
+		pfiface.PfconfigID = pppoe.PfconfigID
 		puresult := s.DB.Save(&pfiface)
 		if puresult.Error != nil {
 			return puresult.Error
@@ -253,6 +274,15 @@ func (s *Storage) Delete(pppoe *Pppoe) error {
 	*pppoe = *existing
 	pfiface := pfifacemodel.Pfiface{}
 	presult := s.DB.Where("Device = ?", fmt.Sprintf("pppac%d", pppoe.DevIndex)).First(&pfiface)
+	if presult.Error == nil {
+		// Subscribers are bound to the server's interface by name; deleting it
+		// would leave them on an interface that no longer exists.
+		if n, err := s.subscribersOn(pfiface.Name); err != nil {
+			return err
+		} else if n > 0 {
+			return refuse("%d subscriber(s) use %s (%s); remove them first", n, pfiface.Name, pfiface.Device)
+		}
+	}
 	if presult.Error != nil {
 		log.Println("PPP interface delete error:", presult.Error)
 	} else {
@@ -269,4 +299,28 @@ func (s *Storage) Delete(pppoe *Pppoe) error {
 		log.Println("pppoes: failed to regenerate npppd.conf:", err)
 	}
 	return nil
+}
+
+// repairRouter attaches servers (and their pppacN interfaces) created without a
+// router to the router of the interface they listen on.
+func repairRouter(db *gorm.DB) {
+	var pppoes []Pppoe
+	if err := db.Where("pfconfig_id = 0 OR pfconfig_id IS NULL").Find(&pppoes).Error; err != nil {
+		return
+	}
+	for _, p := range pppoes {
+		parent := pfifacemodel.Pfiface{}
+		if db.Where("device = ?", p.Device).First(&parent).Error != nil || parent.PfconfigID == 0 {
+			continue
+		}
+		db.Model(&Pppoe{}).Where("id = ?", p.ID).Update("pfconfig_id", parent.PfconfigID)
+		db.Model(&pfifacemodel.Pfiface{}).Where("device = ? AND (pfconfig_id = 0 OR pfconfig_id IS NULL)", fmt.Sprintf("pppac%d", p.DevIndex)).Update("pfconfig_id", parent.PfconfigID)
+	}
+}
+
+// subscribersOn counts the subscribers served on the named interface.
+func (s *Storage) subscribersOn(ifname string) (int64, error) {
+	var n int64
+	err := s.DB.Table("subs").Where("type = ? AND deleted_at IS NULL", ifname).Count(&n).Error
+	return n, err
 }
