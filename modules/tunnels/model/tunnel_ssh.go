@@ -204,18 +204,50 @@ func startLocked(t *Tunnel) error {
 			return nil
 		}
 	}
-	script := fmt.Sprintf("%s -o ServerAliveInterval=60 -o ConnectTimeout=10 -o BatchMode=yes -o ExitOnForwardFailure=yes %s %s -N -f %s@%s >/dev/null 2>&1 </dev/null",
-		sshBin, forwardFlag(t.Type), ForwardSpec(t), t.RemoteUser, SshTarget(t))
-	if err := launchProc(t.Name, script); err != nil {
+	if err := launchProc(t.Name, startScript(sshBin, t)); err != nil {
 		return fmt.Errorf("ssh %s %s: %w", forwardFlag(t.Type), ForwardSpec(t), err)
 	}
 	return nil
 }
 
-// launchProc runs script on the gateway; a var so tests can stand in for
-// arkgated.
+// startScript is the shell text that starts t's ssh.
+//
+// ssh's standard output goes to /dev/null and its standard error to a
+// temporary file, never to arkgated's pipes: with -f, ssh keeps running in
+// the background, and anything still holding those pipes would leave
+// arkgated's command runner waiting for them to close for the life of the
+// tunnel. The file is what lets a failed start say why: ssh's last lines are
+// printed back ("remote port forwarding failed for listen port 8000",
+// "Permission denied (publickey)", "Connection timed out"...), where before
+// the only answer was a bare NOK.
+//
+// Only a regular file is ever removed: if mktemp itself fails the output is
+// discarded to /dev/null, which must not be deleted afterwards.
+func startScript(ssh string, t *Tunnel) string {
+	return fmt.Sprintf(`e=$(mktemp /tmp/tunnel.XXXXXXXXXX) || e=/dev/null
+%s -o ServerAliveInterval=60 -o ConnectTimeout=10 -o BatchMode=yes -o ExitOnForwardFailure=yes %s %s -N -f %s@%s >/dev/null 2>"$e" </dev/null
+rc=$?
+[ $rc -eq 0 ] || tail -n 3 "$e"
+[ -f "$e" ] && rm -f "$e"
+exit $rc`, ssh, forwardFlag(t.Type), ForwardSpec(t), t.RemoteUser, SshTarget(t))
+}
+
+// launchProc runs script on the gateway and, if it fails, returns what the
+// script printed as the error; a var so tests can stand in for arkgated.
 var launchProc = func(name, script string) error {
-	return sendArkCmd("StartTunnel: "+name, shBin, []string{"-c", script})
+	conn := utils.GetArkConn()
+	if conn == nil {
+		return fmt.Errorf("arkgated unreachable")
+	}
+	conn.SetDeadline(time.Now().Add(sendArkTimeout))
+	out, err := Acmd.PrepareCmd("StartTunnel: "+name, shBin, []string{"-c", script}).SendCmdOutput(conn)
+	if err != nil {
+		if msg := strings.TrimSpace(out); msg != "" {
+			return errors.New(strings.ReplaceAll(msg, "\n", "; "))
+		}
+		return err
+	}
+	return nil
 }
 
 // Stop kills t's ssh process, if it's running. A tunnel that isn't

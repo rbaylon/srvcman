@@ -2,6 +2,9 @@ package tunnelmodel
 
 import (
 	"errors"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -344,5 +347,65 @@ func TestFindDuplicate(t *testing.T) {
 	cand = mk(1, TypeRemote, 8000, 8000)
 	if d := findDuplicate(existing, &cand); d != nil {
 		t.Errorf("tunnel reported as a duplicate of itself: %+v", d)
+	}
+}
+
+// runStart runs the real start script under sh with a stand-in for ssh, and
+// returns what it printed and its exit status.
+func runStart(t *testing.T, fakeSsh string) (string, int) {
+	t.Helper()
+	sh, err := exec.LookPath("sh")
+	if err != nil {
+		t.Skip("no sh on this machine")
+	}
+	dir := t.TempDir()
+	path := filepath.ToSlash(filepath.Join(dir, "ssh"))
+	if err := os.WriteFile(path, []byte("#!/bin/sh\n"+fakeSsh+"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	tn := Tunnel{Name: "t", Type: TypeRemote, RemoteUser: "u", SshHost: "h.example.com", RemoteIp: "127.0.0.1", RemotePort: 8000, LocalIp: "127.0.0.1", LocalPort: 8000}
+	out, err := exec.Command(sh, "-c", startScript(path, &tn)).CombinedOutput()
+	code := 0
+	if ee, ok := err.(*exec.ExitError); ok {
+		code = ee.ExitCode()
+	} else if err != nil {
+		t.Fatal(err)
+	}
+	return strings.TrimSpace(string(out)), code
+}
+
+// When ssh fails, the reason has to come back, not just "NOK".
+func TestStartScriptReturnsSshsErrorOnFailure(t *testing.T) {
+	out, code := runStart(t, `echo "Warning: noise" >&2; echo "Error: remote port forwarding failed for listen port 8000" >&2; exit 255`)
+	if code != 255 {
+		t.Errorf("exit status %d, want ssh's own 255", code)
+	}
+	if !strings.Contains(out, "remote port forwarding failed for listen port 8000") {
+		t.Errorf("output %q does not carry ssh's error", out)
+	}
+}
+
+// ...and a start that works prints nothing, so arkgated's reply stays empty.
+func TestStartScriptIsSilentOnSuccess(t *testing.T) {
+	out, code := runStart(t, `echo "debug noise on stderr" >&2; exit 0`)
+	if code != 0 || out != "" {
+		t.Errorf("success gave exit %d and output %q, want 0 and nothing", code, out)
+	}
+}
+
+// ssh must not be handed arkgated's pipes: with -f it keeps running, and
+// anything still holding them would stall arkgated's command runner.
+func TestStartScriptKeepsSshOffArkgatedsPipes(t *testing.T) {
+	tn := Tunnel{Name: "t", Type: TypeRemote, RemoteUser: "u", RemoteIp: "127.0.0.1", RemotePort: 1, LocalIp: "127.0.0.1", LocalPort: 1}
+	s := startScript("/usr/bin/ssh", &tn)
+	for _, want := range []string{">/dev/null", `2>"$e"`, "</dev/null", "[ -f \"$e\" ] && rm -f \"$e\""} {
+		if !strings.Contains(s, want) {
+			t.Errorf("start script lacks %q:\n%s", want, s)
+		}
+	}
+	// The one thing that must never happen: deleting /dev/null when mktemp
+	// failed. rm is only ever reached through the regular-file test.
+	if strings.Contains(strings.ReplaceAll(s, `[ -f "$e" ] && rm -f "$e"`, ""), "rm ") {
+		t.Errorf("start script removes something outside the regular-file guard:\n%s", s)
 	}
 }
