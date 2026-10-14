@@ -66,6 +66,13 @@ case "$1" in
 	exit 0 ;;
 esac
 `)
+	e.shim("rdate", `#!/bin/sh
+echo "rdate $*" >> "$SHIM_DIR/calls"
+[ -f "$SHIM_DIR/rdate_fails" ] && { echo "rdate: $2: no answer" >&2; exit 1; }
+[ -f "$SHIM_DIR/rdate_first_fails" ] && [ "$2" = "time.cloudflare.com" ] && exit 1
+date
+exit 0
+`)
 	e.shim("stat", `#!/bin/sh
 # only "stat -f %m /bsd" is used
 cat "$SHIM_DIR/bsd_mtime" 2>/dev/null || echo 1000
@@ -398,4 +405,36 @@ func TestRunnerBaseComesFromItsOwnLocation(t *testing.T) {
 		t.Fatalf("marker %q", b)
 	}
 	_ = fmt.Sprint
+}
+
+// The clock is set before anything is fetched, and a server that does not answer
+// is skipped.
+func TestRunnerSetsTheClockBeforeCheckingTheSystem(t *testing.T) {
+	e := newRunnerEnv(t)
+	e.stageFiles("1.0.1", map[string][]byte{"install.sh": []byte("#!/bin/sh\nexit 0\n")})
+	e.flag("rdate_first_fails")
+	if code := e.run(); code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	calls, _ := os.ReadFile(e.shims + "/calls")
+	c := string(calls)
+	first := strings.Index(c, "rdate -n time.cloudflare.com")
+	second := strings.Index(c, "rdate -n time.google.com")
+	sys := strings.Index(c, "syspatch -c")
+	if first < 0 || second < first || sys < second {
+		t.Errorf("want rdate (first server, then the next) before syspatch, got:\n%s", c)
+	}
+}
+
+// No time server answering must not stop the update: syspatch is the judge.
+func TestRunnerCarriesOnWhenNoTimeServerAnswers(t *testing.T) {
+	e := newRunnerEnv(t)
+	e.stageFiles("1.0.1", map[string][]byte{"install.sh": []byte("#!/bin/sh\nexit 0\n")})
+	e.flag("rdate_fails")
+	if code := e.run(); code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	if st := e.status(); st["state"] != "success" {
+		t.Errorf("state %q, want success", st["state"])
+	}
 }

@@ -58,6 +58,22 @@
 //	                  "reboot_pending": bool}
 //	    Return-Status: 200 on Success
 //
+//	  /api/v1/updates/mirror
+//	    Method: GET
+//	    Headers: Authorization Bearer
+//	    Return: JSON {"mirror": "<the gateway's /etc/installurl>", "default": "<OpenBSD's default>"}
+//	    Return-Status: 200 on Success
+//
+//	  /api/v1/updates/mirror
+//	    Method: PUT
+//	    Headers: Authorization Bearer
+//	    Body: JSON {"mirror": "<http(s) address>"}
+//	    The new mirror is tested (it must serve this release's SHA256.sig)
+//	    before /etc/installurl is replaced.
+//	    Return: JSON as GET
+//	    Return-Status: 200 on Success
+//	                   400 on a bad address or a mirror that does not answer
+//
 //	  /api/v1/updates/check
 //	    Method: PUT
 //	    Headers: Authorization Bearer
@@ -141,6 +157,17 @@ func (s *settingsIn) Bind(r *http.Request) error {
 	return nil
 }
 
+// mirrorBody is the body of the mirror calls.
+type mirrorBody struct {
+	Mirror  string `json:"mirror"`
+	Default string `json:"default,omitempty"`
+}
+
+func (m *mirrorBody) Bind(r *http.Request) error {
+	m.Mirror = strings.TrimSpace(m.Mirror)
+	return validate.MaxLen("mirror", m.Mirror, 255)
+}
+
 func UpdatesRouter(db *gorm.DB) chi.Router {
 	r := chi.NewRouter()
 	r.Use(security.TokenRequired(db, "updates"))
@@ -188,6 +215,29 @@ func UpdatesRouter(db *gorm.DB) chi.Router {
 	})
 	r.Get("/software/install", func(w http.ResponseWriter, r *http.Request) {
 		render.JSON(w, r, updatesmodel.Default.JobStatus(updatesmodel.GormStore{DB: db}))
+	})
+	// The OpenBSD mirror the gateway downloads system updates from
+	// (/etc/installurl). Changing it tests the new mirror first.
+	r.Get("/mirror", func(w http.ResponseWriter, r *http.Request) {
+		m, err := updatesmodel.GetMirror()
+		if err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "Mirror error", http.StatusInternalServerError))
+			return
+		}
+		render.JSON(w, r, mirrorBody{Mirror: m, Default: updatesmodel.DefaultMirror})
+	})
+	r.Put("/mirror", func(w http.ResponseWriter, r *http.Request) {
+		in := &mirrorBody{}
+		if err := render.Bind(r, in); err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "Bind error", http.StatusBadRequest))
+			return
+		}
+		m, err := updatesmodel.SetMirror(in.Mirror)
+		if err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "Mirror not changed", http.StatusBadRequest))
+			return
+		}
+		render.JSON(w, r, mirrorBody{Mirror: m, Default: updatesmodel.DefaultMirror})
 	})
 	// The check is started in the background and polled, not waited on:
 	// syspatch fetches its patch list over the network and can take

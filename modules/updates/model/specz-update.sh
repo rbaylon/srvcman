@@ -86,18 +86,50 @@ while read -r sum name; do
 	[ "$got" = "$sum" ] || fail "The update file $name does not match its checksum."
 done <"$STAGE/MANIFEST"
 
+# Set the clock first. Everything the next steps fetch is checked against
+# certificates, and a wrong clock (a virtual machine that was suspended, a box
+# without a battery-backed clock) makes every one of those checks fail. rdate -n
+# asks an SNTP server and sets the time; the servers are tried in turn and a
+# failure of all of them is not fatal here: syspatch will say if it matters.
+sync_clock() {
+	for server in time.cloudflare.com time.google.com pool.ntp.org time.nist.gov; do
+		if out=$(rdate -n "$server" 2>&1); then
+			log "clock: set from $server: $out"
+			return 0
+		fi
+		log "clock: $server did not answer: $out"
+	done
+	log "clock: could not be set from any server; carrying on with $(date)"
+	return 1
+}
+
 # 2. Bring the operating system up to date. syspatch can patch itself first, so
 # run it until it has nothing left (three rounds at most). A kernel patch only
 # takes effect after a restart, which this script never does: it notes that one
 # is pending and srvcman shows that quietly.
 STEP=os
+put running os "Setting the clock"
+sync_clock
 put running os "Preparing the system"
 bsd_before=$(stat -f %m /bsd 2>/dev/null || echo 0)
 round=0
 while [ "$round" -lt 3 ]; do
 	round=$((round + 1))
 	log "syspatch round $round: checking"
-	list=$(syspatch -c 2>>"$LOG") || fail "The system could not be checked for updates."
+	if ! list=$(syspatch -c 2>>"$LOG"); then
+		# syspatch says nothing useful when it cannot reach the mirror, so
+		# repeat its first request and keep what that says. The commonest
+		# cause on a virtual machine is a clock that stopped while the host
+		# slept: the mirror's certificate check then fails.
+		log "syspatch -c failed; the system time is $(date)"
+		probe=$(ftp -o /dev/null -M "$(cat /etc/installurl 2>/dev/null)/$(uname -r)/$(machine)/SHA256.sig" 2>&1)
+		log "mirror check: ${probe:-no output}"
+		case "$probe" in
+		*ocsp* | *certificate* | *"not yet valid"* | *expired*)
+			fail "The system could not be checked for updates: the server could not verify the update mirror, which usually means its clock is wrong (it reads $(date)). Correct the date and try again." ;;
+		esac
+		fail "The system could not be checked for updates. Check that the server can reach the internet."
+	fi
 	if [ -z "$list" ]; then
 		log "syspatch: nothing to apply"
 		break
