@@ -1,14 +1,14 @@
 // Package pppoeroutes - Arkgate API pppoe module
 //
 //	Module Routes:
-//	  /api/v1/pppoes
+//	  /api/v1/pppoe
 //	    Method: GET
 //	    Headers: Authorization Bearer
 //	    Return: JSON object with list of pppoe objects
 //	    Return-Status: 200 on Success
 //	                   500 on Error
 //
-//	  /api/v1/pppoes/conf
+//	  /api/v1/pppoe/conf
 //	    Method: GET
 //	    Headers: Authorization Bearer
 //	    Return: JSON {"conf": "<generated npppd.conf text>"}, freshly
@@ -16,7 +16,7 @@
 //	    Return-Status: 200 on Success
 //	                   500 on Error
 //
-//	  /api/v1/pppoes/<pppoeId>
+//	  /api/v1/pppoe/<pppoeId>
 //	    Method: GET|PUT|DELETE
 //	    Headers: Authorization Bearer
 //	    Return: JSON pppoe object ( exept for delete method )
@@ -24,7 +24,7 @@
 //	                   500 on Error
 //	                   400 on Bad request
 //
-//	  /api/v1/pppoes/create
+//	  /api/v1/pppoe/create
 //	    Method: POST
 //	    Headers: Authorization Bearer
 //	    Return: JSON pppoe object ( exept for delete method )
@@ -32,7 +32,7 @@
 //	                   500 on Error
 //	                   400 on Bad request
 //
-//	  /api/v1/pppoes/status
+//	  /api/v1/pppoe/status
 //	    Method: GET
 //	    Headers: Authorization Bearer
 //	    Return: JSON {"running": bool, "output": "<rcctl check output>"}
@@ -40,9 +40,9 @@
 //	                   stopped - that's a normal status, not an error)
 //	                   500 if arkgated itself couldn't be reached
 //
-//	  /api/v1/pppoes/start
-//	  /api/v1/pppoes/stop
-//	  /api/v1/pppoes/restart
+//	  /api/v1/pppoe/start
+//	  /api/v1/pppoe/stop
+//	  /api/v1/pppoe/restart
 //	    Method: PUT
 //	    Headers: Authorization Bearer
 //	    Return: JSON {"result": "<action> ok"}
