@@ -64,13 +64,7 @@ func ChangeRouter(db Changemodel.Crud, pppoeRecords func() (int, error)) chi.Rou
 		errors := []Changemodel.Change{}
 		changes := make(map[string]int)
 		for _, data := range res {
-			data.Applied = "yes"
 			changes[data.Module] += 1
-			err := db.Update(&data)
-			if err != nil {
-				log.Printf("Error updating change: %d", data.ID)
-				errors = append(errors, data)
-			}
 		}
 		pfcmd := Acmd.GetPFcmds("/tmp/")
 		ifchange := false
@@ -195,7 +189,20 @@ func ChangeRouter(db Changemodel.Crud, pppoeRecords func() (int, error)) chi.Rou
 				Records: pppoeRecords,
 			})...)
 		}
-		//utils.GetArkConn()
+		// A change is marked applied only once its step succeeded. One whose step
+		// failed stays pending, so the operator still sees it and a later apply
+		// (after the cause is fixed) retries it.
+		failed := changeapply.Failed(errors)
+		for _, data := range res {
+			if changeapply.Held(data.Module, failed) {
+				continue
+			}
+			data.Applied = "yes"
+			if err := db.Update(&data); err != nil {
+				log.Printf("Error updating change: %d", data.ID)
+				errors = append(errors, data)
+			}
+		}
 		render.JSON(w, r, errors)
 	})
 	r.Get("/pending", func(w http.ResponseWriter, r *http.Request) {

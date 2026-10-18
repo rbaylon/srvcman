@@ -38,10 +38,13 @@ func (a *Plan) Bind(r *http.Request) error {
 	if err := validate.Int("upspeed", a.Upspeed); err != nil {
 		return err
 	}
-	if err := validate.Int("stdown", a.SpeedTestDown); err != nil {
+	// These two are the bandwidth of the plan's pf queues ("bandwidth N min 5M
+	// max N"). Below the 5M minimum, or zero, pfctl rejects the whole rule set
+	// and no change can be applied until the plan is corrected.
+	if err := validate.IntRange("stdown", a.SpeedTestDown, 5, 100000); err != nil {
 		return err
 	}
-	return validate.Int("stup", a.SpeedTestUp)
+	return validate.IntRange("stup", a.SpeedTestUp, 5, 100000)
 }
 
 type Crud interface {

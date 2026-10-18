@@ -91,6 +91,10 @@ func SubRouter(db submodel.Crud) chi.Router {
 			render.Render(w, r, utils.ErrInvalidRequest(err, "Bind error", http.StatusBadRequest))
 			return
 		}
+		if err = submodel.CheckPlan(db.GetDB(), sub.Plan); err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "Bind error", http.StatusBadRequest))
+			return
+		}
 		sub.ID = uint(id)
 		errupdate := db.Update(sub)
 		if errupdate == nil {
@@ -170,6 +174,10 @@ func SubRouter(db submodel.Crud) chi.Router {
 			return
 		}
 		if err := sub.RequireContactDetails(); err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "Bind error", http.StatusBadRequest))
+			return
+		}
+		if err := submodel.CheckPlan(db.GetDB(), sub.Plan); err != nil {
 			render.Render(w, r, utils.ErrInvalidRequest(err, "Bind error", http.StatusBadRequest))
 			return
 		}

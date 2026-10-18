@@ -83,6 +83,10 @@ func PlanRouter(db planmodel.Crud) chi.Router {
 			json.NewEncoder(w).Encode(map[string]string{"Error": fmt.Sprintf("%s", err)})
 			return
 		}
+		if err = plan.Bind(r); err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "Bind error", http.StatusBadRequest))
+			return
+		}
 		plan.ID = uint(id)
 		err = db.Update(&plan)
 		if err == nil {
@@ -96,7 +100,12 @@ func PlanRouter(db planmodel.Crud) chi.Router {
 		err := json.NewDecoder(r.Body).Decode(&plan)
 		w.Header().Set("Content-Type", "application/json")
 		if err != nil {
-			json.NewEncoder(w).Encode(map[string]string{"Error": fmt.Sprintf("%s", err)})
+			render.Render(w, r, utils.ErrInvalidRequest(err, "Bind error", http.StatusBadRequest))
+			return
+		}
+		if err = plan.Bind(r); err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "Bind error", http.StatusBadRequest))
+			return
 		}
 
 		err = db.Add(&plan)
@@ -117,6 +126,14 @@ func PlanRouter(db planmodel.Crud) chi.Router {
 		plan, err := db.GetById(uint(id))
 		if err != nil {
 			json.NewEncoder(w).Encode(map[string]string{"Error": fmt.Sprintf("Error getting plan from DB %s", err)})
+			return
+		}
+		// Subscribers are shaped by their plan's queue; deleting a plan they use
+		// leaves pf.conf with queues that have no bandwidth, which pfctl rejects.
+		var users int64
+		if cerr := db.GetDB().Table("subs").Where("plan = ? AND deleted_at IS NULL", plan.Plan).Count(&users).Error; cerr == nil && users > 0 {
+			render.Render(w, r, utils.ErrInvalidRequest(
+				fmt.Errorf("%d subscriber(s) use the plan %s; change their plan first", users, plan.Plan), "Not accepted", http.StatusBadRequest))
 			return
 		}
 		err = db.Delete(plan)

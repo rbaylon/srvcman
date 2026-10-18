@@ -284,3 +284,22 @@ func (s *Storage) Delete(sub *Sub) error {
 	}
 	return nil
 }
+
+// CheckPlan refuses a plan name that is not a configured plan. The plan name is
+// what pf.conf's queue for the subscriber is built from; an unknown one yields a
+// queue with no bandwidth, which makes pfctl reject the whole rule set and
+// blocks every apply until it is fixed. A blank plan is left alone: subscribers
+// on interfaces without shaping have none.
+func CheckPlan(db *gorm.DB, plan string) error {
+	if plan == "" {
+		return nil
+	}
+	var n int64
+	if err := db.Table("plans").Where("plan = ? AND deleted_at IS NULL", plan).Count(&n).Error; err != nil {
+		return err
+	}
+	if n == 0 {
+		return fmt.Errorf("plan %q does not exist; choose one of the configured plans", plan)
+	}
+	return nil
+}
