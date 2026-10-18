@@ -1,6 +1,8 @@
 package security
 
 import (
+	"crypto/subtle"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -9,6 +11,7 @@ import (
 	"github.com/golang-jwt/jwt"
 	"gorm.io/gorm"
 
+	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/render"
 	"github.com/rbaylon/srvcman/database"
 	changemodel "github.com/rbaylon/srvcman/modules/changes/model"
@@ -19,6 +22,24 @@ import (
 )
 
 var secretKey = []byte(database.GetEnvVariable("APP_SECRET"))
+
+// adminUsername/adminPassword are the sole source of the admin account's
+// credentials - it is not a row in the users table (see usermodel.MigrateDB),
+// so Login checks a request against these directly instead of going through
+// usermodel.Crud. Every admin decision - login, token lifetime, full access
+// in validateToken - goes through isAdmin, so the account can be named
+// anything APP_ADMIN says.
+var (
+	adminUsername = database.GetEnvVariable("APP_ADMIN")
+	adminPassword = database.GetEnvVariable("APP_ADMIN_PW")
+)
+
+// isAdmin reports whether username is the .env-configured admin account.
+// An unset APP_ADMIN matches nothing, so an empty username can never be
+// mistaken for the admin.
+func isAdmin(username string) bool {
+	return adminUsername != "" && username == adminUsername
+}
 
 type Token struct {
 	Name string
@@ -39,37 +60,51 @@ func Login(db usermodel.Crud) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Println(r.RequestURI, r.Method, r.Header.Get("X-Real-IP"))
 		username, password, ok := r.BasicAuth()
-		if ok {
-			user, err := db.GetByUsername(username)
-			if err != nil {
-				render.Render(w, r, utils.ErrInvalidRequest(err, "DB error", http.StatusInternalServerError))
-				return
-			}
+		if !ok {
+			render.Render(w, r, utils.ErrInvalidRequest(fmt.Errorf("Baisc Auth error"), "Credentials not found.", http.StatusUnauthorized))
+			return
+		}
 
-			// If password is plaintext only, use password encryption and store it back to db
-			if user.Password == password {
-				encryptedpassword, err := HashPassword(password)
-				if err != nil {
-					render.Render(w, r, utils.ErrInvalidRequest(err, "Bcrypt Error encrypting password.", http.StatusInternalServerError))
-				}
-				user.Password = encryptedpassword
-				err = db.Update(user)
-				if err != nil {
-					render.Render(w, r, utils.ErrInvalidRequest(err, "DB update error", http.StatusInternalServerError))
-					return
-				}
-				sendtoken(w, r, user.Username)
+		if isAdmin(username) {
+			if subtle.ConstantTimeCompare([]byte(password), []byte(adminPassword)) != 1 || adminPassword == "" {
+				render.Render(w, r, utils.ErrInvalidRequest(fmt.Errorf("Baisc Auth error"), "Password invalid.", http.StatusUnauthorized))
 				return
 			}
-			// Check already hashed password
-			if CheckPasswordHash(password, user.Password) {
-				sendtoken(w, r, user.Username)
-				return
-			}
+			sendtoken(w, r, username)
+			return
+		}
+
+		user, err := db.GetByUsername(username)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			render.Render(w, r, utils.ErrInvalidRequest(fmt.Errorf("Baisc Auth error"), "Password invalid.", http.StatusUnauthorized))
 			return
 		}
-		render.Render(w, r, utils.ErrInvalidRequest(fmt.Errorf("Baisc Auth error"), "Credentials not found.", http.StatusUnauthorized))
+		if err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "DB error", http.StatusInternalServerError))
+			return
+		}
+
+		// If password is plaintext only, use password encryption and store it back to db
+		if user.Password == password {
+			encryptedpassword, err := HashPassword(password)
+			if err != nil {
+				render.Render(w, r, utils.ErrInvalidRequest(err, "Bcrypt Error encrypting password.", http.StatusInternalServerError))
+			}
+			user.Password = encryptedpassword
+			err = db.Update(user)
+			if err != nil {
+				render.Render(w, r, utils.ErrInvalidRequest(err, "DB update error", http.StatusInternalServerError))
+				return
+			}
+			sendtoken(w, r, user.Username)
+			return
+		}
+		// Check already hashed password
+		if CheckPasswordHash(password, user.Password) {
+			sendtoken(w, r, user.Username)
+			return
+		}
+		render.Render(w, r, utils.ErrInvalidRequest(fmt.Errorf("Baisc Auth error"), "Password invalid.", http.StatusUnauthorized))
 	})
 }
 
@@ -94,19 +129,32 @@ func TokenRequired(db *gorm.DB, module string) func(next http.Handler) http.Hand
 			}
 			//fmt.Println(reqtoken)
 			token := reqtoken[len("Bearer "):]
-			err := validateToken(token, r, db, module)
+			audit, err := validateToken(token, r, db, module)
 			if err != nil {
 				render.Render(w, r, utils.ErrInvalidRequest(err, "Invalid token", http.StatusUnauthorized))
 				return
 			}
-			next.ServeHTTP(w, r)
+			// The changes module is the list itself: applying it must not leave a
+			// new pending entry about the apply.
+			if audit == nil || module == "changes" {
+				next.ServeHTTP(w, r)
+				return
+			}
+			// A change is only recorded as pending once the request has been
+			// accepted: a refused or failed one changed nothing, and listing it
+			// made the operator apply (and npppd restart) for no reason.
+			ww := chimw.NewWrapResponseWriter(w, r.ProtoMajor)
+			next.ServeHTTP(ww, r)
+			if st := ww.Status(); st == 0 || st < 400 {
+				audit()
+			}
 		})
 	}
 }
 
 func createToken(username string) (string, error) {
 	var expiry time.Duration = 1
-	if username == "admin" {
+	if isAdmin(username) {
 		expiry = 8760
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256,
@@ -123,7 +171,10 @@ func createToken(username string) (string, error) {
 	return tokenString, nil
 }
 
-func validateToken(tokenString string, r *http.Request, db *gorm.DB, module string) error {
+// validateToken authorises the request. For one that modifies data it also
+// returns the function that records it in the audit trail, for the caller to
+// run once the request has succeeded.
+func validateToken(tokenString string, r *http.Request, db *gorm.DB, module string) (func(), error) {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		// createToken only ever signs with HS256 - reject anything else
 		// up front instead of relying on the keyfunc always handing back
@@ -140,10 +191,10 @@ func validateToken(tokenString string, r *http.Request, db *gorm.DB, module stri
 		return secretKey, nil
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !token.Valid {
-		return fmt.Errorf("Invalid token.")
+		return nil, fmt.Errorf("Invalid token.")
 	}
 	method := r.Method
 	path := r.RequestURI
@@ -159,15 +210,15 @@ func validateToken(tokenString string, r *http.Request, db *gorm.DB, module stri
 		// crash request handling.
 		username, ok = claims["username"].(string)
 		if !ok {
-			return fmt.Errorf("Invalid token.")
+			return nil, fmt.Errorf("Invalid token.")
 		}
-		if username == "admin" {
+		if isAdmin(username) {
 			fmt.Printf("Access granted: %s %s %s from %s\n", username, method, path, remote)
 			data := fmt.Sprintf("%s %s %s %s", path, method, username, remote)
 			if !strings.Contains(method, "GET") {
-				audittrail(data, module, db)
+				return func() { audittrail(data, module, db) }, nil
 			}
-			return nil
+			return nil, nil
 		}
 		// userdata/poldata errors (a DB hiccup, or a stale JWT for a
 		// since-deleted user) used to be silently ignored here, and
@@ -215,15 +266,15 @@ func validateToken(tokenString string, r *http.Request, db *gorm.DB, module stri
 	}
 	if deny {
 		fmt.Printf("Access denied: %s %s %s from %s\n", username, method, path, remote)
-		return fmt.Errorf("Access denied.")
+		return nil, fmt.Errorf("Access denied.")
 	}
 	fmt.Printf("Access granted: %s %s %s from %s\n", username, method, path, remote)
 	data := fmt.Sprintf("%s %s %s %s", path, method, username, remote)
 	if !strings.Contains(method, "GET") {
-		audittrail(data, module, db)
+		return func() { audittrail(data, module, db) }, nil
 	}
 
-	return nil
+	return nil, nil
 }
 
 func audittrail(data string, module string, db *gorm.DB) {

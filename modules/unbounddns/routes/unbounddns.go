@@ -31,24 +31,85 @@
 //	    Return-Status: 200 on Success
 //	                   500 on Error
 //	                   400 on Bad request
+//
+//	  /api/v1/unbounddns/status
+//	    Method: GET
+//	    Headers: Authorization Bearer
+//	    Return: JSON {"running": bool, "output": "<rcctl check output>"}
+//	    Return-Status: 200 on Success (including when the service is
+//	                   stopped - that's a normal status, not an error)
+//	                   500 if arkgated itself couldn't be reached
+//
+//	  /api/v1/unbounddns/start
+//	  /api/v1/unbounddns/stop
+//	  /api/v1/unbounddns/restart
+//	    Method: PUT
+//	    Headers: Authorization Bearer
+//	    Return: JSON {"result": "<action> ok"}
+//	    Return-Status: 200 on Success
+//	                   500 if arkgated itself couldn't be reached, or
+//	                   rcctl reported failure
 package unbounddnsroutes
 
 import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
+	Acmd "github.com/rbaylon/arkgatecmd"
 	"github.com/rbaylon/srvcman/modules/security"
 	unbounddnsmodel "github.com/rbaylon/srvcman/modules/unbounddns/model"
 	"github.com/rbaylon/srvcman/utils"
 )
 
+// service is the OpenBSD rc.d name of the unbound daemon this module
+// configures - srvcman only ever controls it via rcctl, it never runs
+// unbound itself.
+const service = "unbound"
+
+// cmdTimeout bounds how long a single rcctl call is allowed to take.
+const cmdTimeout = 15 * time.Second
+
+// runViaArk dispatches an rcctl Arkcmd to arkgated and returns its output.
+func runViaArk(cmd *Acmd.Arkcmd) (string, error) {
+	conn := utils.GetArkConn()
+	if conn == nil {
+		return "", fmt.Errorf("arkgated unreachable")
+	}
+	conn.SetDeadline(time.Now().Add(cmdTimeout))
+	return cmd.SendCmdOutput(conn)
+}
+
+func serviceAction(action string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		cmd := Acmd.GetRcCmds(service)[action]
+		if err := cmd.SendCmd(utils.GetArkConn()); err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, fmt.Sprintf("%s failed", action), http.StatusInternalServerError))
+			return
+		}
+		render.JSON(w, r, map[string]string{"result": action + " ok"})
+	}
+}
+
 func UnboundDnsRouter(db unbounddnsmodel.Crud) chi.Router {
 	r := chi.NewRouter()
 	dbconn := db.GetDB()
 	r.Use(security.TokenRequired(dbconn, "unbounddns"))
+
+	r.Get("/status", func(w http.ResponseWriter, r *http.Request) {
+		out, err := runViaArk(Acmd.GetRcCmds(service)["status"])
+		if out == "" && err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "arkgated unreachable", http.StatusInternalServerError))
+			return
+		}
+		render.JSON(w, r, map[string]any{"running": err == nil, "output": out})
+	})
+	r.Put("/start", serviceAction("start"))
+	r.Put("/stop", serviceAction("stop"))
+	r.Put("/restart", serviceAction("restart"))
 
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		res, errdb := db.GetAll()

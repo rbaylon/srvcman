@@ -50,14 +50,24 @@ func CheckExpired(db vouchermodel.Crud) {
 	}
 }
 
-// GetArkConn opens a mutual-TLS connection to arkgated's network IPC
-// listener, replacing the old Unix-domain-socket dial now that srvcman and
-// arkgated can run on separate hosts. ARKGATED_TLS_CERT/ARKGATED_TLS_KEY
+// GetArkConn connects to arkgated's IPC listener, preferring the local Unix
+// domain socket when ARKGATED_SOCKET is set (srvcman and arkgated running on
+// the same host - no PKI material needed, trust is filesystem permissions)
+// and falling back to mutual TLS over the network otherwise, which is what
+// lets arkgated run on a separate host. ARKGATED_TLS_CERT/ARKGATED_TLS_KEY
 // are srvcman's own client identity (verified by arkgated's ClientCAs);
-// ARKGATED_TLS_CA verifies arkgated's server cert in return. All three, plus
-// ARKGATED_ADDR (host:port), are expected to be provisioned by the
+// ARKGATED_TLS_CA verifies arkgated's server cert in return. All of these,
+// plus ARKGATED_ADDR (host:port), are expected to be provisioned by the
 // deployment's own PKI tooling - this only ever reads them.
 func GetArkConn() net.Conn {
+	if sockPath := database.GetEnvVariable("ARKGATED_SOCKET"); sockPath != "" {
+		c, err := net.Dial("unix", sockPath)
+		if err == nil {
+			return c
+		}
+		log.Println("ArkConn: unix socket dial error, falling back to mTLS:", err)
+	}
+
 	addr := database.GetEnvVariable("ARKGATED_ADDR")
 	certfile := database.GetEnvVariable("ARKGATED_TLS_CERT")
 	keyfile := database.GetEnvVariable("ARKGATED_TLS_KEY")

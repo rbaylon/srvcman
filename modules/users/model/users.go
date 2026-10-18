@@ -23,31 +23,16 @@ type User struct {
 }
 
 // MigrateDB - Create the table if not exist in DB
+//
+// The admin account is not seeded here (or anywhere) as a row in this
+// table - its credentials live only in .env (APP_ADMIN/APP_ADMIN_PW) and
+// are checked directly by security.Login, and validateToken grants it
+// full access purely from the "admin" username claim, independent of any
+// DB record. See Bind below for why a DB user can't take that username.
 func MigrateDB(db *gorm.DB) {
 	err := db.AutoMigrate(&User{})
 	if err != nil {
 		log.Fatal(err)
-	}
-	var user User
-	result := db.Where("Username = ?", "admin").First(&user)
-	if result.Error != nil {
-		log.Println("Starting app for the first time.")
-		var (
-			uname = database.GetEnvVariable("APP_ADMIN")
-			upass = database.GetEnvVariable("APP_ADMIN_PW")
-		)
-		safepassword, err := bcrypt.GenerateFromPassword([]byte(upass), 14)
-		if err != nil {
-			log.Println(err)
-		}
-		user.Username = uname
-		user.Password = string(safepassword)
-		user.Firstname = "Admin"
-		user.Lastname = "istrator"
-		res := db.Create(&user)
-		if res == nil {
-			log.Fatal("Failed to create admin user")
-		}
 	}
 }
 
@@ -58,6 +43,12 @@ func (a *User) Bind(r *http.Request) error {
 	}
 	if err := validate.Alnum("username", a.Username, 100); err != nil {
 		return err
+	}
+	// The admin account's username is reserved for the .env-sourced
+	// credential security.Login checks directly - a DB user with the same
+	// name would just be an unreachable duplicate, shadowed by that check.
+	if adminUsername := database.GetEnvVariable("APP_ADMIN"); adminUsername != "" && a.Username == adminUsername {
+		return fmt.Errorf("username %q is reserved for the admin account", a.Username)
 	}
 	// Password is intentionally not charset-restricted (Alnum) - forcing
 	// passwords to be alphanumeric-only would weaken them. It's still

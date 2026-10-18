@@ -50,9 +50,11 @@
 package pfifaceroutes
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
@@ -124,6 +126,10 @@ func PfifaceRouter(db pfifacemodel.Crud) chi.Router {
 			render.Render(w, r, utils.ErrInvalidRequest(err, "Bind error", http.StatusBadRequest))
 			return
 		}
+		if err = refusePppac(db, uint(id), pfiface.Device); err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "Not accepted", http.StatusBadRequest))
+			return
+		}
 		pfiface.ID = uint(id)
 		err = db.Update(&pfiface)
 		if err == nil {
@@ -136,6 +142,10 @@ func PfifaceRouter(db pfifacemodel.Crud) chi.Router {
 		pfiface := pfifacemodel.Pfiface{}
 		if err := render.Bind(r, &pfiface); err != nil {
 			render.Render(w, r, utils.ErrInvalidRequest(err, "Bind error", http.StatusBadRequest))
+			return
+		}
+		if err := refusePppac(db, 0, pfiface.Device); err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "Not accepted", http.StatusBadRequest))
 			return
 		}
 		err := db.Add(&pfiface)
@@ -156,6 +166,10 @@ func PfifaceRouter(db pfifacemodel.Crud) chi.Router {
 			render.Render(w, r, utils.ErrInvalidRequest(err, "Bind error", http.StatusBadRequest))
 			return
 		}
+		if err = refusePppac(db, uint(id), ""); err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "Not accepted", http.StatusBadRequest))
+			return
+		}
 		pfiface.ID = uint(id)
 		err = db.Delete(&pfiface)
 		if err == nil {
@@ -165,4 +179,21 @@ func PfifaceRouter(db pfifacemodel.Crud) chi.Router {
 		render.Render(w, r, utils.ErrInvalidRequest(err, fmt.Sprintf("Error deleting record for pfiface  ID %s", chi.URLParam(r, "pfifaceId")), http.StatusBadRequest))
 	})
 	return r
+}
+
+// refusePppac keeps the pppacN interfaces out of reach of this module: the PPPoE
+// servers create, change and remove them, and npppd creates the devices. An
+// edit here would be overwritten or, worse, leave a server pointing at nothing.
+// id is the record being changed (0 for a new one), device the one it is given.
+func refusePppac(db pfifacemodel.Crud, id uint, device string) error {
+	const msg = "pppacN interfaces are managed by the PPPoE servers; change them under PPPoE"
+	if strings.HasPrefix(device, "pppac") {
+		return errors.New(msg)
+	}
+	if id > 0 {
+		if cur, err := db.GetById(id); err == nil && strings.HasPrefix(cur.Device, "pppac") {
+			return errors.New(msg)
+		}
+	}
+	return nil
 }

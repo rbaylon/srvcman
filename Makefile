@@ -1,9 +1,10 @@
 app=srvcman
-distdir=$(HOME)/${app}
+version!=git describe --tags --always
+distdir=/usr/local/arkgate/${app}
 
 build:
 	go mod tidy
-	go build -o ${app}
+	go build -ldflags "-s -w" -o ${app}
 
 rc:
 	install -m 755 rc.${app} /etc/rc.d/${app}
@@ -18,10 +19,8 @@ dist:
 	make build
 	make install
 	cp rc.${app} ${distdir}/
-	cd ${distdir}
-	cd ..
-	tar -czvf ${app}.tar.gz ${app}
-	ls -l ${app}.tar.gz
+	tar -C /usr/local/arkgate/ -czvf /usr/local/arkgate/${app}-${version}.tar.gz ${app}
+	ls -l /usr/local/arkgate/${app}-${version}.tar.gz
 
 clean:
 	rm -rf ${distdir}

@@ -45,6 +45,19 @@ var (
 	// address lists that pair a host with a port using '@' (e.g. unbound's
 	// DNS-over-TLS forward-addr entries like "1.1.1.1@853").
 	safeTokenUpstreamRegex = regexp.MustCompile(`^[A-Za-z0-9./:_,\*@ -]+$`)
+	// phoneRegex allows digits and the punctuation phone numbers are
+	// commonly written with: a leading '+' for the country code, plus
+	// spaces, '-', '(' and ')' as separators. Letters are rejected - this
+	// is a number to dial, not a free-form contact note.
+	phoneRegex = regexp.MustCompile(`^\+?[0-9()\- ]+$`)
+	// fqdnRegex is a dotted hostname: labels of letters/digits/hyphens that
+	// neither start nor end with a hyphen, at least two of them, no trailing
+	// dot. It is deliberately much stricter than safeTokenRegex, which
+	// permits '/' and would let a value like "../../etc/x" through - an FQDN
+	// is interpolated into file paths (/etc/ssl/<fqdn>.fullchain.pem) and
+	// passed as a command argument, so anything path-shaped has to be
+	// rejected outright rather than escaped later.
+	fqdnRegex = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)+$`)
 )
 
 func maxLenOrDefault(maxLen int) int {
@@ -182,6 +195,70 @@ func SafeTokenUpstream(field, value string, maxLen int) error {
 	}
 	if !safeTokenUpstreamRegex.MatchString(value) {
 		return fmt.Errorf("%s contains unsupported characters", field)
+	}
+	return nil
+}
+
+// Phone requires value to be empty or a dialable number: digits, an
+// optional leading '+', and ' ', '-', '(' or ')' as separators, up to
+// maxLen characters (MaxStringLen if maxLen <= 0). It deliberately doesn't
+// try to validate the number itself (length, country code, area code) -
+// those vary by country and would reject legitimate entries.
+func Phone(field, value string, maxLen int) error {
+	if value == "" {
+		return nil
+	}
+	maxLen = maxLenOrDefault(maxLen)
+	if len(value) > maxLen {
+		return fmt.Errorf("%s exceeds maximum length of %d characters", field, maxLen)
+	}
+	if !phoneRegex.MatchString(value) {
+		return fmt.Errorf("%s is not a valid contact number", field)
+	}
+	return nil
+}
+
+// emailRegex is a deliberately conservative address: an unquoted local part
+// of the characters mail systems actually use, '@', then a dotted hostname.
+// It leaves out quoted local parts, comments, display names and IP-literal
+// domains - legal in RFC 5322 but never what a subscriber types, and the
+// ones that could carry whitespace or line breaks. That matters because the
+// address ends up in mail headers, where a CR or LF would let a value
+// inject extra headers.
+var emailRegex = regexp.MustCompile("^[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+(\\.[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+)*@[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)+$")
+
+// Email requires value to be empty or a single plain email address, at most
+// 254 characters with a local part of at most 64 (the RFC 5321 limits).
+func Email(field, value string) error {
+	if value == "" {
+		return nil
+	}
+	if len(value) > 254 {
+		return fmt.Errorf("%s exceeds maximum length of 254 characters", field)
+	}
+	if !emailRegex.MatchString(value) || strings.LastIndex(value, "@") > 64 {
+		return fmt.Errorf("%s is not a valid email address", field)
+	}
+	return nil
+}
+
+// FQDN requires value to be empty or a syntactically valid fully
+// qualified domain name (at least two labels, e.g. "gw.example.com"),
+// at most maxLen characters (MaxStringLen if maxLen <= 0).
+//
+// This is a security boundary, not just a format check: callers build
+// file paths and command arguments out of the result, so a value
+// containing '/', '..', whitespace or a quote must never get through.
+func FQDN(field, value string, maxLen int) error {
+	if value == "" {
+		return nil
+	}
+	maxLen = maxLenOrDefault(maxLen)
+	if len(value) > maxLen {
+		return fmt.Errorf("%s exceeds maximum length of %d characters", field, maxLen)
+	}
+	if !fqdnRegex.MatchString(value) {
+		return fmt.Errorf("%s is not a valid fully qualified domain name", field)
 	}
 	return nil
 }

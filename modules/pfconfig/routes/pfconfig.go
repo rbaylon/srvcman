@@ -32,10 +32,12 @@
 //	  /api/v1/pfconfigs/create
 //	    Method: POST
 //	    Headers: Authorization Bearer
-//	    Return: JSON pfconfig object ( exept for delete method )
+//	    Only one router record may exist: creating a second is refused.
+//	    Return: JSON pfconfig object
 //	    Return-Status: 200 on Success
-//	                   500 on Error
 //	                   400 on Bad request
+//	                   409 if a router record already exists
+//	                   500 on Error
 package pfconfigroutes
 
 import (
@@ -134,7 +136,27 @@ func PfconfigRouter(db pfconfigmodel.Crud) chi.Router {
 		err := json.NewDecoder(r.Body).Decode(&pfconfig)
 		w.Header().Set("Content-Type", "application/json")
 		if err != nil {
+			// Stop here: carrying on would store an empty router record,
+			// which the single-router rule below would then make
+			// impossible to replace except by deleting it.
+			w.WriteHeader(http.StatusBadRequest)
 			json.NewEncoder(w).Encode(map[string]string{"Error": fmt.Sprintf("%s", err)})
+			return
+		}
+
+		// There is exactly one router per gateway: this box is the router.
+		// A second record could never be selected anywhere in the UI, but
+		// would still be picked up by anything that lists every router.
+		// arkgated enrolls itself through this route on start-up and only
+		// logs a refusal, so rejecting here is safe for it.
+		var existing int64
+		if err := dbconn.Model(&pfconfigmodel.Pfconfig{}).Count(&existing).Error; err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "DB error", http.StatusInternalServerError))
+			return
+		}
+		if existing > 0 {
+			render.Render(w, r, utils.ErrInvalidRequest(fmt.Errorf("a router is already configured"), "Only one router record is allowed; edit the existing one", http.StatusConflict))
+			return
 		}
 
 		err = db.Add(&pfconfig)

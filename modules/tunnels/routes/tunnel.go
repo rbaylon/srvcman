@@ -4,9 +4,36 @@
 //	  /api/v1/tunnels
 //	    Method: GET
 //	    Headers: Authorization Bearer
-//	    Return: JSON object with list of tunnel objects
+//	    Return: JSON list of tunnel objects, each decorated with live
+//	            "status" ("active"/"inactive"), "pid" and "age" read from
+//	            the gateway's process list
 //	    Return-Status: 200 on Success
 //	                   500 on Error
+//
+//	  /api/v1/tunnels/startinactive
+//	    Method: PUT
+//	    Headers: Authorization Bearer
+//	    Return: JSON {"started": <n>, "failed": <n>} - (re)establishes
+//	            every tunnel that isn't currently running
+//	    Return-Status: 200 on Success
+//
+//	  /api/v1/tunnels/sshkey
+//	    Method: PUT
+//	    Headers: Authorization Bearer
+//	    Return: JSON {"public_key": "<ssh public key>", "generated": <bool>} -
+//	            the gateway's tunnel public key, generated first if none
+//	            exists yet (generated is true then)
+//	    Return-Status: 200 on Success
+//	                   500 if the key couldn't be read or created
+//
+//	  /api/v1/tunnels/<tunnelId>/start
+//	  /api/v1/tunnels/<tunnelId>/stop
+//	    Method: PUT
+//	    Headers: Authorization Bearer
+//	    Return: JSON tunnel object
+//	    Return-Status: 200 on Success
+//	                   400 on Bad request
+//	                   500 if the ssh/kill command couldn't be dispatched
 //
 //	  /api/v1/tunnels/<tunnelId>
 //	    Method: GET|PUT|DELETE
@@ -31,14 +58,11 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/jwtauth/v5"
 	"github.com/go-chi/render"
 	"github.com/rbaylon/srvcman/modules/security"
 	tunnelmodel "github.com/rbaylon/srvcman/modules/tunnels/model"
 	"github.com/rbaylon/srvcman/utils"
 )
-
-var tokenAuth *jwtauth.JWTAuth
 
 func TunnelRouter(db tunnelmodel.Crud) chi.Router {
 	r := chi.NewRouter()
@@ -51,33 +75,68 @@ func TunnelRouter(db tunnelmodel.Crud) chi.Router {
 			render.Render(w, r, utils.ErrInvalidRequest(errdb, "DB error", http.StatusInternalServerError))
 			return
 		}
-		render.JSON(w, r, res)
+		render.JSON(w, r, tunnelmodel.Decorate(res))
 	})
-	r.Get("/{tunnelId}", func(w http.ResponseWriter, r *http.Request) {
-		id, err := strconv.Atoi(chi.URLParam(r, "tunnelId"))
+	r.Put("/startinactive", func(w http.ResponseWriter, r *http.Request) {
+		started, failed := tunnelmodel.StartInactive(dbconn)
+		render.JSON(w, r, map[string]int{"started": started, "failed": failed})
+	})
+	r.Put("/sshkey", func(w http.ResponseWriter, r *http.Request) {
+		key, err := tunnelmodel.EnsureSshKey()
 		if err != nil {
-			render.Render(w, r, utils.ErrInvalidRequest(err, fmt.Sprintf("Invalid tunnel ID %s", chi.URLParam(r, "tunnelId")), http.StatusBadRequest))
+			render.Render(w, r, utils.ErrInvalidRequest(err, "Failed to get ssh key", http.StatusInternalServerError))
 			return
 		}
-		tunnel, err := db.GetById(uint(id))
+		render.JSON(w, r, key)
+	})
+	r.Get("/{tunnelId}", func(w http.ResponseWriter, r *http.Request) {
+		tunnel, err := lookup(db, r)
 		if err != nil {
 			render.Render(w, r, utils.ErrInvalidRequest(err, "DB error", http.StatusInternalServerError))
+			return
+		}
+		decorated := tunnelmodel.Decorate([]tunnelmodel.Tunnel{*tunnel})
+		render.JSON(w, r, decorated[0])
+	})
+	r.Put("/{tunnelId}/start", func(w http.ResponseWriter, r *http.Request) {
+		tunnel, err := lookup(db, r)
+		if err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "DB error", http.StatusInternalServerError))
+			return
+		}
+		// Starting is the operator's request for the tunnel to run, so it
+		// is no longer stopped on purpose - recorded first, so that if the
+		// start fails the watchdog keeps trying.
+		if err := tunnelmodel.SetManualStop(dbconn, tunnel.ID, false); err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "DB error", http.StatusInternalServerError))
+			return
+		}
+		tunnel.ManualStop = false
+		if err := tunnelmodel.Start(tunnel); err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "Failed to start tunnel", http.StatusInternalServerError))
 			return
 		}
 		render.JSON(w, r, tunnel)
 	})
-	r.Get("/sub/{tunnelId}", func(w http.ResponseWriter, r *http.Request) {
-		id, err := strconv.Atoi(chi.URLParam(r, "tunnelId"))
-		if err != nil {
-			render.Render(w, r, utils.ErrInvalidRequest(err, fmt.Sprintf("Invalid tunnel ID %s", chi.URLParam(r, "tunnelId")), http.StatusBadRequest))
-			return
-		}
-		tunnels, err := db.GetBySubId(uint(id))
+	r.Put("/{tunnelId}/stop", func(w http.ResponseWriter, r *http.Request) {
+		tunnel, err := lookup(db, r)
 		if err != nil {
 			render.Render(w, r, utils.ErrInvalidRequest(err, "DB error", http.StatusInternalServerError))
 			return
 		}
-		render.JSON(w, r, tunnels)
+		// Recorded before the process is killed: otherwise the watchdog
+		// could see it down in between and start it again. The flag is what
+		// keeps a tunnel the operator stopped from being brought back.
+		if err := tunnelmodel.SetManualStop(dbconn, tunnel.ID, true); err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "DB error", http.StatusInternalServerError))
+			return
+		}
+		tunnel.ManualStop = true
+		if err := tunnelmodel.Stop(tunnel); err != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(err, "Failed to stop tunnel", http.StatusInternalServerError))
+			return
+		}
+		render.JSON(w, r, tunnel)
 	})
 	r.Put("/{tunnelId}", func(w http.ResponseWriter, r *http.Request) {
 		id, err := strconv.Atoi(chi.URLParam(r, "tunnelId"))
@@ -91,6 +150,13 @@ func TunnelRouter(db tunnelmodel.Crud) chi.Router {
 			return
 		}
 		tunnel.ID = uint(id)
+		if dup, derr := tunnelmodel.FindDuplicate(dbconn, &tunnel); derr != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(derr, "DB error", http.StatusInternalServerError))
+			return
+		} else if dup != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(fmt.Errorf("tunnel %q already forwards the same thing", dup.Name), "Duplicate tunnel", http.StatusBadRequest))
+			return
+		}
 		err = db.Update(&tunnel)
 		if err == nil {
 			render.JSON(w, r, tunnel)
@@ -102,6 +168,13 @@ func TunnelRouter(db tunnelmodel.Crud) chi.Router {
 		tunnel := tunnelmodel.Tunnel{}
 		if err := render.Bind(r, &tunnel); err != nil {
 			render.Render(w, r, utils.ErrInvalidRequest(err, "Bind error", http.StatusBadRequest))
+			return
+		}
+		if dup, derr := tunnelmodel.FindDuplicate(dbconn, &tunnel); derr != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(derr, "DB error", http.StatusInternalServerError))
+			return
+		} else if dup != nil {
+			render.Render(w, r, utils.ErrInvalidRequest(fmt.Errorf("tunnel %q already forwards the same thing", dup.Name), "Duplicate tunnel", http.StatusBadRequest))
 			return
 		}
 		err := db.Add(&tunnel)
@@ -117,11 +190,12 @@ func TunnelRouter(db tunnelmodel.Crud) chi.Router {
 			render.Render(w, r, utils.ErrInvalidRequest(err, fmt.Sprintf("Invalid tunnel ID %s", chi.URLParam(r, "tunnelId")), http.StatusBadRequest))
 			return
 		}
+		// No render.Bind here, unlike the other handlers: a DELETE carries
+		// no body, and binding the empty one runs the create-time checks
+		// (name and type required) against nothing, which refused every
+		// delete - so a tunnel that was wrong, or could not connect, could
+		// not be removed.
 		tunnel := tunnelmodel.Tunnel{}
-		if err = render.Bind(r, &tunnel); err != nil {
-			render.Render(w, r, utils.ErrInvalidRequest(err, "Bind error", http.StatusBadRequest))
-			return
-		}
 		tunnel.ID = uint(id)
 		err = db.Delete(&tunnel)
 		if err == nil {
@@ -131,4 +205,13 @@ func TunnelRouter(db tunnelmodel.Crud) chi.Router {
 		render.Render(w, r, utils.ErrInvalidRequest(err, fmt.Sprintf("Error deleting record for tunnel  ID %s", chi.URLParam(r, "tunnelId")), http.StatusBadRequest))
 	})
 	return r
+}
+
+// lookup resolves the {tunnelId} URL param to its record.
+func lookup(db tunnelmodel.Crud, r *http.Request) (*tunnelmodel.Tunnel, error) {
+	id, err := strconv.Atoi(chi.URLParam(r, "tunnelId"))
+	if err != nil {
+		return nil, fmt.Errorf("invalid tunnel ID %s", chi.URLParam(r, "tunnelId"))
+	}
+	return db.GetById(uint(id))
 }

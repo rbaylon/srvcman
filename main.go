@@ -11,6 +11,13 @@
 //		    Headers: Authorization Basic
 //		    Return: JSON object with JWT
 //		    Return-Status: 200
+//		  /api/v1/modules
+//		    Method: GET
+//		    Headers: Authorization Bearer (policies)
+//		    Return: JSON {"modules": [...]} - every module name actually
+//		            mounted in this run (core + enabled optional), sorted.
+//		            See ActiveModuleNames in moduleregistry.go.
+//		    Return-Status: 200
 package main
 
 import (
@@ -96,6 +103,17 @@ func main() {
 			voucherStore = vouchermodel.New(db)
 		}
 	}
+
+	// Every module name actually mounted above, core and enabled-optional -
+	// gated behind the policies check since its only consumer is
+	// srvcmanui's policy create/edit form (it needs to know what a
+	// Policy.Type can validly be), not a general-purpose route.
+	activeModules := ActiveModuleNames(enabledModules)
+	r.With(security.TokenRequired(db, "policies")).Get("/api/v1/modules", func(w http.ResponseWriter, r *http.Request) {
+		render.JSON(w, r, struct {
+			Modules []string `json:"modules"`
+		}{activeModules})
+	})
 
 	if voucherStore != nil {
 		go utils.CheckExpired(voucherStore)

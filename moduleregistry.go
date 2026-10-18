@@ -4,27 +4,35 @@ import (
 	"encoding/json"
 	"log"
 	"os"
+	"sort"
 
 	"github.com/go-chi/chi/v5"
 	"gorm.io/gorm"
 
+	acmemodel "github.com/rbaylon/srvcman/modules/acme/model"
+	acmeroutes "github.com/rbaylon/srvcman/modules/acme/routes"
+	billportalmodel "github.com/rbaylon/srvcman/modules/billportal/model"
 	billportalroutes "github.com/rbaylon/srvcman/modules/billportal/routes"
+	captiveportalmodel "github.com/rbaylon/srvcman/modules/captiveportal/model"
 	captiveportalroutes "github.com/rbaylon/srvcman/modules/captiveportal/routes"
 	changemodel "github.com/rbaylon/srvcman/modules/changes/model"
 	changeroutes "github.com/rbaylon/srvcman/modules/changes/routes"
 	collectionmodel "github.com/rbaylon/srvcman/modules/collections/model"
 	collectionroutes "github.com/rbaylon/srvcman/modules/collections/routes"
-	dhcpservermodel "github.com/rbaylon/srvcman/modules/dhcpserver/model"
-	dhcpserverroutes "github.com/rbaylon/srvcman/modules/dhcpserver/routes"
 	dhcpmodel "github.com/rbaylon/srvcman/modules/dhcps/model"
 	dhcproutes "github.com/rbaylon/srvcman/modules/dhcps/routes"
+	dhcpservermodel "github.com/rbaylon/srvcman/modules/dhcpserver/model"
+	dhcpserverroutes "github.com/rbaylon/srvcman/modules/dhcpserver/routes"
 	diagnosticsroutes "github.com/rbaylon/srvcman/modules/diagnostics/routes"
+	fdmonitorroutes "github.com/rbaylon/srvcman/modules/fdmonitor/routes"
 	fwmodel "github.com/rbaylon/srvcman/modules/firewall/model"
 	fwroutes "github.com/rbaylon/srvcman/modules/firewall/routes"
 	gatewaymonitormodel "github.com/rbaylon/srvcman/modules/gatewaymonitor/model"
 	gatewaymonitorroutes "github.com/rbaylon/srvcman/modules/gatewaymonitor/routes"
 	groupmodel "github.com/rbaylon/srvcman/modules/groups/model"
 	grouproutes "github.com/rbaylon/srvcman/modules/groups/routes"
+	netblocksmodel "github.com/rbaylon/srvcman/modules/netblocks/model"
+	netblocksroutes "github.com/rbaylon/srvcman/modules/netblocks/routes"
 	paymentmodel "github.com/rbaylon/srvcman/modules/payments/model"
 	paymentroutes "github.com/rbaylon/srvcman/modules/payments/routes"
 	pfconfigmodel "github.com/rbaylon/srvcman/modules/pfconfig/model"
@@ -35,6 +43,7 @@ import (
 	pflowroutes "github.com/rbaylon/srvcman/modules/pflows/routes"
 	planmodel "github.com/rbaylon/srvcman/modules/plans/model"
 	planroutes "github.com/rbaylon/srvcman/modules/plans/routes"
+	powerroutes "github.com/rbaylon/srvcman/modules/power/routes"
 	policymodel "github.com/rbaylon/srvcman/modules/policies/model"
 	policyroutes "github.com/rbaylon/srvcman/modules/policies/routes"
 	pppoemodel "github.com/rbaylon/srvcman/modules/pppoes/model"
@@ -43,12 +52,16 @@ import (
 	runtimeroutes "github.com/rbaylon/srvcman/modules/runtimes/routes"
 	staticroutesmodel "github.com/rbaylon/srvcman/modules/staticroutes/model"
 	staticroutesroutes "github.com/rbaylon/srvcman/modules/staticroutes/routes"
+	snmpservermodel "github.com/rbaylon/srvcman/modules/snmpserver/model"
+	snmpserverroutes "github.com/rbaylon/srvcman/modules/snmpserver/routes"
 	submodel "github.com/rbaylon/srvcman/modules/subs/model"
 	subroutes "github.com/rbaylon/srvcman/modules/subs/routes"
 	tunnelmodel "github.com/rbaylon/srvcman/modules/tunnels/model"
 	tunnelroutes "github.com/rbaylon/srvcman/modules/tunnels/routes"
 	unbounddnsmodel "github.com/rbaylon/srvcman/modules/unbounddns/model"
 	unbounddnsroutes "github.com/rbaylon/srvcman/modules/unbounddns/routes"
+	updatesmodel "github.com/rbaylon/srvcman/modules/updates/model"
+	updatesroutes "github.com/rbaylon/srvcman/modules/updates/routes"
 	usermodel "github.com/rbaylon/srvcman/modules/users/model"
 	userroutes "github.com/rbaylon/srvcman/modules/users/routes"
 	vlanmodel "github.com/rbaylon/srvcman/modules/vlans/model"
@@ -109,12 +122,28 @@ var coreModules = []Module{
 	}},
 	{"changes", func(r chi.Router, db *gorm.DB) {
 		changemodel.MigrateDB(db)
-		r.Mount("/api/v1/changes", changeroutes.ChangeRouter(changemodel.New(db)))
+		r.Mount("/api/v1/changes", changeroutes.ChangeRouter(changemodel.New(db), func() (int, error) {
+			all, err := pppoemodel.New(db).GetAll()
+			return len(all), err
+		}))
 	}},
 	// diagnostics has no model - nothing to migrate, it just triggers
 	// ping/traceroute and returns their output.
 	{"diagnostics", func(r chi.Router, db *gorm.DB) {
 		r.Mount("/api/v1/diagnostics", diagnosticsroutes.DiagnosticsRouter(db))
+	}},
+	{"acme", func(r chi.Router, db *gorm.DB) {
+		acmemodel.MigrateDB(db)
+		r.Mount("/api/v1/acme", acmeroutes.AcmeRouter(acmemodel.New(db)))
+	}},
+	// power has no model - it only asks arkgated to restart or shut down the
+	// gateway, and each request must carry its own confirmation.
+	{"power", func(r chi.Router, db *gorm.DB) {
+		r.Mount("/api/v1/power", powerroutes.PowerRouter(db))
+	}},
+	{"updates", func(r chi.Router, db *gorm.DB) {
+		updatesmodel.MigrateDB(db)
+		r.Mount("/api/v1/updates", updatesroutes.UpdatesRouter(db))
 	}},
 }
 
@@ -139,6 +168,10 @@ var optionalModules = map[string]Module{
 		unbounddnsmodel.MigrateDB(db)
 		r.Mount("/api/v1/unbounddns", unbounddnsroutes.UnboundDnsRouter(unbounddnsmodel.New(db)))
 	}},
+	"snmpserver": {"snmpserver", func(r chi.Router, db *gorm.DB) {
+		snmpservermodel.MigrateDB(db)
+		r.Mount("/api/v1/snmpserver", snmpserverroutes.SnmpServerRouter(snmpservermodel.New(db)))
+	}},
 	"firewall": {"firewall", func(r chi.Router, db *gorm.DB) {
 		fwmodel.MigrateDB(db)
 		r.Mount("/api/v1/firewall", fwroutes.FwRouter(fwmodel.New(db)))
@@ -149,7 +182,15 @@ var optionalModules = map[string]Module{
 	}},
 	"tunnels": {"tunnels", func(r chi.Router, db *gorm.DB) {
 		tunnelmodel.MigrateDB(db)
+		// Keeps tunnels up; only runs while tunnels are on record.
+		tunnelmodel.StartWatchdog(db)
 		r.Mount("/api/v1/tunnels", tunnelroutes.TunnelRouter(tunnelmodel.New(db)))
+	}},
+	// netblocks keeps speedtest network blocks both in the database and in
+	// the gateway's fast.com.blocks file (edited through arkgated).
+	"netblocks": {"netblocks", func(r chi.Router, db *gorm.DB) {
+		netblocksmodel.MigrateDB(db)
+		r.Mount("/api/v1/netblocks", netblocksroutes.NetblocksRouter(db))
 	}},
 	"collections": {"collections", func(r chi.Router, db *gorm.DB) {
 		collectionmodel.MigrateDB(db)
@@ -173,22 +214,56 @@ var optionalModules = map[string]Module{
 		pflowmodel.MigrateDB(db)
 		r.Mount("/api/v1/pflow", pflowroutes.PflowRouter(pflowmodel.New(db)))
 	}},
-	// captiveportal has no model - like diagnostics, there's nothing to
-	// migrate. It only asks arkgated to rcctl start/stop/restart/check the
-	// separate subsportal app's "captiveportal" rc.d service.
+	// captiveportal both configures the separate subsportal app (rendering
+	// its .env, which arkgated installs) and controls its "captiveportal"
+	// rc.d service via rcctl.
 	"captiveportal": {"captiveportal", func(r chi.Router, db *gorm.DB) {
-		r.Mount("/api/v1/captiveportal", captiveportalroutes.CaptivePortalRouter(db))
+		captiveportalmodel.MigrateDB(db)
+		r.Mount("/api/v1/captiveportal", captiveportalroutes.CaptivePortalRouter(captiveportalmodel.New(db)))
 	}},
-	// billportal is the same shape as captiveportal, for the separate
-	// billportal app's "billportal" rc.d service.
+	// billportal is the same shape as captiveportal: it both configures
+	// the separate billportal app (rendering its .env, which arkgated
+	// installs) and controls its "billportal" rc.d service via rcctl.
 	"billportal": {"billportal", func(r chi.Router, db *gorm.DB) {
-		r.Mount("/api/v1/billportal", billportalroutes.BillPortalRouter(db))
+		billportalmodel.MigrateDB(db)
+		r.Mount("/api/v1/billportal", billportalroutes.BillPortalRouter(billportalmodel.New(db)))
+	}},
+	// fdmonitor has no model either - it only reads kern.nfiles/maxfiles
+	// and fstat off the gateway through arkgated.
+	"fdmonitor": {"fdmonitor", func(r chi.Router, db *gorm.DB) {
+		r.Mount("/api/v1/fdmonitor", fdmonitorroutes.FdMonitorRouter(db))
 	}},
 }
 
 // ModuleConfig is the shape of the JSON module config file (default: cmd.json).
 type ModuleConfig struct {
 	Modules []string `json:"modules"`
+}
+
+// ActiveModuleNames returns every module name actually mounted in this run:
+// every core module (always on) plus whichever of enabled's names are real
+// entries in optionalModules. An unknown name in the config file is
+// already skipped when mounting (see main.go's loop over enabledModules)
+// rather than trusted as-is, so it's skipped here identically - this list
+// is meant to reflect what this deployment really has running, not every
+// name someone could put in the config file.
+//
+// This backs the /api/v1/modules route, which exists so srvcmanui's policy
+// form can offer exactly the module names a Policy.Type can meaningfully
+// reference, without srvcmanui having to hardcode (and fall out of sync
+// with) srvcman's own module list.
+func ActiveModuleNames(enabled []string) []string {
+	names := make([]string, 0, len(coreModules)+len(enabled))
+	for _, m := range coreModules {
+		names = append(names, m.Name)
+	}
+	for _, name := range enabled {
+		if m, ok := optionalModules[name]; ok {
+			names = append(names, m.Name)
+		}
+	}
+	sort.Strings(names)
+	return names
 }
 
 // LoadModuleNames reads the module config file at path and returns the list

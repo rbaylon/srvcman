@@ -34,6 +34,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
 	Acmd "github.com/rbaylon/arkgatecmd"
+	changeapply "github.com/rbaylon/srvcman/modules/changes/apply"
 	Changemodel "github.com/rbaylon/srvcman/modules/changes/model"
 	"github.com/rbaylon/srvcman/modules/security"
 	"github.com/rbaylon/srvcman/utils"
@@ -41,10 +42,10 @@ import (
 
 //var tokenAuth *jwtauth.JWTAuth
 
-func ChangeRouter(db Changemodel.Crud) chi.Router {
+func ChangeRouter(db Changemodel.Crud, pppoeRecords func() (int, error)) chi.Router {
 	r := chi.NewRouter()
 	dbconn := db.GetDB()
-	r.Use(security.TokenRequired(dbconn, "Changes"))
+	r.Use(security.TokenRequired(dbconn, "changes"))
 
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		res, errdb := db.GetAll()
@@ -73,7 +74,7 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 		}
 		pfcmd := Acmd.GetPFcmds("/tmp/")
 		ifchange := false
-		if changes["pfifaces"] > 0 {
+		if changes["pfifaces"] > 0 || changes["pflows"] > 0 {
 			// arkgated generates its own hostname.<if>/mygate files (from
 			// live data it fetches from this API, see
 			// config/pf.ConfigCreate) and does the actual backup/cp/mv into
@@ -81,6 +82,11 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 			// srvcman having written those files locally first, since
 			// srvcman and arkgated may run on separate hosts. Only files
 			// whose content actually changed get promoted/restarted.
+			//
+			// pflows go through the same path: ConfigCreate renders a
+			// hostname.<if> for each pflow device (flowsrc/flowdst/
+			// pflowproto) exactly as it does for a regular interface, so a
+			// pflow edit needs this apply step or it never reaches /etc.
 			ifchange = true
 			applycmd := Acmd.PrepareCmd("ApplyIfaces", "true", []string{})
 			if err := applycmd.SendCmd(utils.GetArkConn()); err != nil {
@@ -91,20 +97,23 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 		if changes["subs"] > 0 || changes["firewall"] > 0 || ifchange {
 			err := pfcmd["check"].SendCmd(utils.GetArkConn())
 			if err != nil {
+				// a rule set that fails its syntax check is never
+				// installed; the running /etc/pf.conf stays as it was
 				exeerror := Changemodel.Change{}
 				exeerror.Module = "subs"
 				exeerror.Data = "error in /tmp/pf.conf"
 				errors = append(errors, exeerror)
-			}
-			pfcmd["backup"].SendCmd(utils.GetArkConn())
-			pfcmd["move"].SendCmd(utils.GetArkConn())
-			err = pfcmd["apply"].SendCmd(utils.GetArkConn())
-			if err != nil {
-				exeerror := Changemodel.Change{}
-				exeerror.Module = "subs"
-				exeerror.Data = "error applying /tmp/pf.conf"
-				errors = append(errors, exeerror)
-				pfcmd["revert"].SendCmd(utils.GetArkConn())
+			} else {
+				pfcmd["backup"].SendCmd(utils.GetArkConn())
+				pfcmd["move"].SendCmd(utils.GetArkConn())
+				err = pfcmd["apply"].SendCmd(utils.GetArkConn())
+				if err != nil {
+					exeerror := Changemodel.Change{}
+					exeerror.Module = "subs"
+					exeerror.Data = "error applying /tmp/pf.conf"
+					errors = append(errors, exeerror)
+					pfcmd["revert"].SendCmd(utils.GetArkConn())
+				}
 			}
 		}
 		if changes["dhcpserver"] > 0 {
@@ -127,6 +136,32 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 				exeerror.Data = "error applying " + dhcpconf
 				errors = append(errors, exeerror)
 				dhcpcmd["revert"].SendCmd(utils.GetArkConn())
+			}
+		}
+		if changes["snmpserver"] > 0 {
+			// snmpd takes -nf for a config check, the same shape as dhcpd,
+			// so GetServiceCmds works unmodified. Its "check" Arkcmd is
+			// named CheckConf_snmpd, which is what arkgated intercepts to
+			// render /tmp/snmpd.conf before validating it.
+			snmpconf := "/tmp/snmpd.conf"
+			snmpcmd := Acmd.GetServiceCmds("snmpd", "/usr/sbin/snmpd", "/etc/", snmpconf)
+			snmprc := Acmd.GetRcCmds("snmpd")
+			err := snmpcmd["check"].SendCmd(utils.GetArkConn())
+			if err != nil {
+				exeerror := Changemodel.Change{}
+				exeerror.Module = "snmpserver"
+				exeerror.Data = "error in " + snmpconf
+				errors = append(errors, exeerror)
+			}
+			snmpcmd["backup"].SendCmd(utils.GetArkConn())
+			snmpcmd["stage"].SendCmd(utils.GetArkConn())
+			err = snmprc["restart"].SendCmd(utils.GetArkConn())
+			if err != nil {
+				exeerror := Changemodel.Change{}
+				exeerror.Module = "snmpserver"
+				exeerror.Data = "error applying " + snmpconf
+				errors = append(errors, exeerror)
+				snmpcmd["revert"].SendCmd(utils.GetArkConn())
 			}
 		}
 		if changes["unbounddns"] > 0 {
@@ -152,21 +187,13 @@ func ChangeRouter(db Changemodel.Crud) chi.Router {
 			}
 		}
 		if changes["pppoes"] > 0 {
-			npppdconf := "/tmp/npppd.conf"
-			// npppd has no built-in config-validate mode (unlike pfctl -nf
-			// or unbound-checkconf), so there's no "check" step here.
-			npppdcmd := Acmd.GetServiceCmds("npppd", "", "/etc/npppd/", npppdconf)
-			npppdrc := Acmd.GetRcCmds("npppd")
-			npppdcmd["backup"].SendCmd(utils.GetArkConn())
-			npppdcmd["stage"].SendCmd(utils.GetArkConn())
-			err := npppdrc["restart"].SendCmd(utils.GetArkConn())
-			if err != nil {
-				exeerror := Changemodel.Change{}
-				exeerror.Module = "pppoes"
-				exeerror.Data = "error applying " + npppdconf
-				errors = append(errors, exeerror)
-				npppdcmd["revert"].SendCmd(utils.GetArkConn())
-			}
+			errors = append(errors, changeapply.Npppd(changeapply.Calls{
+				Send: func(c *Acmd.Arkcmd) error { return c.SendCmd(utils.GetArkConn()) },
+				Output: func(c *Acmd.Arkcmd) (string, error) {
+					return c.SendCmdOutput(utils.GetArkConn())
+				},
+				Records: pppoeRecords,
+			})...)
 		}
 		//utils.GetArkConn()
 		render.JSON(w, r, errors)

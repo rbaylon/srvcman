@@ -28,6 +28,28 @@
 //	            gatewaymonitor list page.
 //	    Return-Status: 200 always
 //
+//	  /api/v1/gatewaymonitor/activehealthchecks
+//	    Method: GET
+//	    Headers: Authorization Bearer
+//	    Return: JSON {"count": <n>, "total_count": <n>, "commands": [...],
+//	            "error": <text, omitted if none>} - how many HealthPing
+//	            connections are currently in flight on arkgated (see
+//	            gatewaymonitormodel.GetActiveHealthChecks). Always 200; a
+//	            failure reaching arkgated is reported in "error", same
+//	            convention as /activeroutes.
+//	    Return-Status: 200 always
+//
+//	  /api/v1/gatewaymonitor/clearhealthchecks
+//	    Method: PUT
+//	    Headers: Authorization Bearer
+//	    Return: JSON {"cleared": <n>, "error": <text, omitted if none>} -
+//	            terminates every in-flight HealthPing on arkgated (see
+//	            gatewaymonitormodel.ClearActiveHealthChecks) and reports how
+//	            many. The administrative "clear stuck health checks" action;
+//	            does not change monitoring configuration, the next
+//	            scheduled tick pings normally.
+//	    Return-Status: 200 always
+//
 //	  /api/v1/gatewaymonitor/<gatewayMonitorId>
 //	    Method: GET|PUT|DELETE
 //	    Headers: Authorization Bearer
@@ -52,6 +74,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
+	"github.com/rbaylon/arkgatecmd"
 	gatewaymonitormodel "github.com/rbaylon/srvcman/modules/gatewaymonitor/model"
 	"github.com/rbaylon/srvcman/modules/security"
 	"github.com/rbaylon/srvcman/utils"
@@ -80,6 +103,28 @@ func GatewayMonitorRouter(db gatewaymonitormodel.Crud) chi.Router {
 			Output string `json:"output"`
 			Error  string `json:"error,omitempty"`
 		}{Output: out}
+		if err != nil {
+			resp.Error = err.Error()
+		}
+		render.JSON(w, r, resp)
+	})
+	r.Get("/activehealthchecks", func(w http.ResponseWriter, r *http.Request) {
+		snap, err := gatewaymonitormodel.GetActiveHealthChecks()
+		resp := struct {
+			arkgatecmd.ActiveHealthChecksSnapshot
+			Error string `json:"error,omitempty"`
+		}{ActiveHealthChecksSnapshot: snap}
+		if err != nil {
+			resp.Error = err.Error()
+		}
+		render.JSON(w, r, resp)
+	})
+	r.Put("/clearhealthchecks", func(w http.ResponseWriter, r *http.Request) {
+		n, err := gatewaymonitormodel.ClearActiveHealthChecks()
+		resp := struct {
+			Cleared int    `json:"cleared"`
+			Error   string `json:"error,omitempty"`
+		}{Cleared: n}
 		if err != nil {
 			resp.Error = err.Error()
 		}

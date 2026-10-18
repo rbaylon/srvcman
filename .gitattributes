@@ -1,0 +1,3 @@
+# The updates runner is run by OpenBSD sh as root: it must never have CRLF line endings.
+*.sh text eol=lf
+rc.* text eol=lf
