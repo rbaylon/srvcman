@@ -38,6 +38,7 @@ import (
 	Changemodel "github.com/rbaylon/srvcman/modules/changes/model"
 	"github.com/rbaylon/srvcman/modules/security"
 	"github.com/rbaylon/srvcman/utils"
+	"github.com/rbaylon/srvcman/utils/rcsvc"
 )
 
 //var tokenAuth *jwtauth.JWTAuth
@@ -123,6 +124,9 @@ func ChangeRouter(db Changemodel.Crud, pppoeRecords func() (int, error)) chi.Rou
 			}
 			dhcpcmd["backup"].SendCmd(utils.GetArkConn())
 			dhcpcmd["stage"].SendCmd(utils.GetArkConn())
+			if _, eerr := rcsvc.EnsureEnabled("dhcpd", utils.GetArkConn); eerr != nil {
+				log.Println("changes:", eerr)
+			}
 			err = dhcprc["restart"].SendCmd(utils.GetArkConn())
 			if err != nil {
 				exeerror := Changemodel.Change{}
@@ -149,6 +153,9 @@ func ChangeRouter(db Changemodel.Crud, pppoeRecords func() (int, error)) chi.Rou
 			}
 			snmpcmd["backup"].SendCmd(utils.GetArkConn())
 			snmpcmd["stage"].SendCmd(utils.GetArkConn())
+			if _, eerr := rcsvc.EnsureEnabled("snmpd", utils.GetArkConn); eerr != nil {
+				log.Println("changes:", eerr)
+			}
 			err = snmprc["restart"].SendCmd(utils.GetArkConn())
 			if err != nil {
 				exeerror := Changemodel.Change{}
@@ -171,6 +178,9 @@ func ChangeRouter(db Changemodel.Crud, pppoeRecords func() (int, error)) chi.Rou
 			}
 			unboundcmd["backup"].SendCmd(utils.GetArkConn())
 			unboundcmd["stage"].SendCmd(utils.GetArkConn())
+			if _, eerr := rcsvc.EnsureEnabled("unbound", utils.GetArkConn); eerr != nil {
+				log.Println("changes:", eerr)
+			}
 			err = unboundrc["restart"].SendCmd(utils.GetArkConn())
 			if err != nil {
 				exeerror := Changemodel.Change{}

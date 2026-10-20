@@ -63,6 +63,7 @@ import (
 	"github.com/rbaylon/srvcman/modules/security"
 	unbounddnsmodel "github.com/rbaylon/srvcman/modules/unbounddns/model"
 	"github.com/rbaylon/srvcman/utils"
+	"github.com/rbaylon/srvcman/utils/rcsvc"
 )
 
 // service is the OpenBSD rc.d name of the unbound daemon this module
@@ -85,6 +86,14 @@ func runViaArk(cmd *Acmd.Arkcmd) (string, error) {
 
 func serviceAction(action string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if action == "start" || action == "restart" {
+			// rcctl refuses to start a service that is not enabled, which is the
+			// state of a daemon the first time it is configured.
+			if _, err := rcsvc.EnsureEnabled(service, utils.GetArkConn); err != nil {
+				render.Render(w, r, utils.ErrInvalidRequest(err, fmt.Sprintf("%s failed", action), http.StatusInternalServerError))
+				return
+			}
+		}
 		cmd := Acmd.GetRcCmds(service)[action]
 		if err := cmd.SendCmd(utils.GetArkConn()); err != nil {
 			render.Render(w, r, utils.ErrInvalidRequest(err, fmt.Sprintf("%s failed", action), http.StatusInternalServerError))
