@@ -23,6 +23,7 @@ func (d *Pppoe) ToConf() string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "tunnel PPPOE%d protocol pppoe {\n", d.DevIndex)
 	fmt.Fprintf(&b, "\tlisten on interface %s\n", d.Device)
+	fmt.Fprintf(&b, "\tpipex yes\n")
 	b.WriteString("}\n\n")
 	fmt.Fprintf(&b, "ipcp IPCP%d {\n", d.DevIndex)
 	fmt.Fprintf(&b, "\tpool-address %s\n", d.PoolAddress)
