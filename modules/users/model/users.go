@@ -103,7 +103,12 @@ func (s *Storage) GetDB() *gorm.DB {
 	return s.DB
 }
 
+// Add creates the user. Username is unique and Delete is a soft delete, so a
+// deleted user of the same name would make the insert fail; it is purged first.
 func (s *Storage) Add(user *User) error {
+	if err := s.DB.Unscoped().Where("username = ? AND deleted_at IS NOT NULL", user.Username).Delete(&User{}).Error; err != nil {
+		return err
+	}
 	safepassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), 14)
 	if err != nil {
 		return err

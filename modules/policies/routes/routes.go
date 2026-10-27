@@ -127,11 +127,10 @@ func PolicyRouter(db policymodel.Crud) chi.Router {
 			render.Render(w, r, utils.ErrInvalidRequest(err, fmt.Sprintf("Invalid policy ID %s", chi.URLParam(r, "policyId")), http.StatusBadRequest))
 			return
 		}
+		// No render.Bind here, unlike the other modules': a DELETE carries no
+		// body worth validating, and Bind requires a name - which the empty body
+		// does not have, so binding it would reject every delete.
 		policy := policymodel.Policy{}
-		if err = render.Bind(r, &policy); err != nil {
-			render.Render(w, r, utils.ErrInvalidRequest(err, "Bind error", http.StatusBadRequest))
-			return
-		}
 		policy.ID = uint(id)
 		err = db.Delete(&policy)
 		if err == nil {

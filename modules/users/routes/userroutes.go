@@ -172,14 +172,34 @@ func UserRouter(db usermodel.Crud) chi.Router {
 			render.Render(w, r, utils.ErrInvalidRequest(err, fmt.Sprintf("Invalid user ID %s", chi.URLParam(r, "userId")), http.StatusBadRequest))
 			return
 		}
+		// No render.Bind here, unlike the other modules': a DELETE carries no
+		// body worth validating, and Bind requires a username - which the empty body
+		// does not have, so binding it would reject every delete.
 		user := usermodel.User{}
-		if err = render.Bind(r, &user); err != nil {
-			render.Render(w, r, utils.ErrInvalidRequest(err, "Bind error", http.StatusBadRequest))
-			return
-		}
 		user.ID = uint(id)
+		// Create adds a group of the user's own name and two default profile
+		// policies; they go with the user instead of lingering unowned.
+		var username string
+		if old, gerr := db.GetById(uint(id)); gerr == nil {
+			username = old.Username
+		}
 		err = db.Delete(&user)
 		if err == nil {
+			if username != "" {
+				dbconn := db.GetDB()
+				poldb := policymodel.New(dbconn)
+				pols := []policymodel.Policy{}
+				dbconn.Where("name IN ?", []string{"DefaultProfile" + username + "RO", "DefaultProfile" + username + "RW"}).Find(&pols)
+				for i := range pols {
+					poldb.RemoveGroups(&pols[i])
+					poldb.Delete(&pols[i])
+				}
+				grp := groupmodel.Group{}
+				if dbconn.Where("groupname = ?", username).First(&grp).Error == nil {
+					dbconn.Exec("DELETE FROM policy_groups WHERE group_id = ?", grp.ID)
+					groupmodel.New(dbconn).Delete(&grp)
+				}
+			}
 			render.JSON(w, r, user)
 			return
 		}

@@ -54,7 +54,12 @@ func (s *Storage) GetDB() *gorm.DB {
 	return s.DB
 }
 
+// Add creates the group. Groupname is unique and Delete is a soft delete, so a
+// deleted group of the same name would make the insert fail; it is purged first.
 func (s *Storage) Add(group *Group) error {
+	if err := s.DB.Unscoped().Where("groupname = ? AND deleted_at IS NOT NULL", group.Groupname).Delete(&Group{}).Error; err != nil {
+		return err
+	}
 	result := s.DB.Create(group)
 	if result.Error != nil {
 		return result.Error

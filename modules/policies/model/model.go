@@ -72,7 +72,12 @@ func New(db *gorm.DB) *Storage {
 	}
 }
 
+// Add creates the policy. Name is unique and Delete is a soft delete, so a
+// deleted policy of the same name would make the insert fail; it is purged first.
 func (s *Storage) Add(policy *Policy) error {
+	if err := s.DB.Unscoped().Where("name = ? AND deleted_at IS NOT NULL", policy.Name).Delete(&Policy{}).Error; err != nil {
+		return err
+	}
 	result := s.DB.Create(policy)
 	if result.Error != nil {
 		return result.Error

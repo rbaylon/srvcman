@@ -43,7 +43,7 @@ import (
 
 //var tokenAuth *jwtauth.JWTAuth
 
-func ChangeRouter(db Changemodel.Crud, pppoeRecords func() (int, error)) chi.Router {
+func ChangeRouter(db Changemodel.Crud, pppoeRecords, dhcpRecords func() (int, error)) chi.Router {
 	r := chi.NewRouter()
 	dbconn := db.GetDB()
 	r.Use(security.TokenRequired(dbconn, "changes"))
@@ -115,25 +115,38 @@ func ChangeRouter(db Changemodel.Crud, pppoeRecords func() (int, error)) chi.Rou
 			dhcpconf := "/tmp/dhcpd.conf"
 			dhcpcmd := Acmd.GetServiceCmds("dhcpd", "/usr/sbin/dhcpd", "/etc/", dhcpconf)
 			dhcprc := Acmd.GetRcCmds("dhcpd")
-			err := dhcpcmd["check"].SendCmd(utils.GetArkConn())
-			if err != nil {
-				exeerror := Changemodel.Change{}
-				exeerror.Module = "dhcpserver"
-				exeerror.Data = "error in " + dhcpconf
-				errors = append(errors, exeerror)
-			}
-			dhcpcmd["backup"].SendCmd(utils.GetArkConn())
-			dhcpcmd["stage"].SendCmd(utils.GetArkConn())
-			if _, eerr := rcsvc.EnsureEnabled("dhcpd", utils.GetArkConn); eerr != nil {
-				log.Println("changes:", eerr)
-			}
-			err = dhcprc["restart"].SendCmd(utils.GetArkConn())
-			if err != nil {
-				exeerror := Changemodel.Change{}
-				exeerror.Module = "dhcpserver"
-				exeerror.Data = "error applying " + dhcpconf
-				errors = append(errors, exeerror)
-				dhcpcmd["revert"].SendCmd(utils.GetArkConn())
+			if n, cerr := dhcpRecords(); cerr == nil && n == 0 {
+				// No DHCP server left: dhcpd refuses an empty configuration,
+				// so stop it and keep it from starting at boot (a stop that
+				// fails only means it was not running).
+				dhcprc["stop"].SendCmd(utils.GetArkConn())
+				if derr := dhcprc["disable"].SendCmd(utils.GetArkConn()); derr != nil {
+					exeerror := Changemodel.Change{}
+					exeerror.Module = "dhcpserver"
+					exeerror.Data = "dhcpd was stopped but could not be disabled at boot"
+					errors = append(errors, exeerror)
+				}
+			} else {
+				err := dhcpcmd["check"].SendCmd(utils.GetArkConn())
+				if err != nil {
+					exeerror := Changemodel.Change{}
+					exeerror.Module = "dhcpserver"
+					exeerror.Data = "error in " + dhcpconf
+					errors = append(errors, exeerror)
+				}
+				dhcpcmd["backup"].SendCmd(utils.GetArkConn())
+				dhcpcmd["stage"].SendCmd(utils.GetArkConn())
+				if _, eerr := rcsvc.EnsureEnabled("dhcpd", utils.GetArkConn); eerr != nil {
+					log.Println("changes:", eerr)
+				}
+				err = dhcprc["restart"].SendCmd(utils.GetArkConn())
+				if err != nil {
+					exeerror := Changemodel.Change{}
+					exeerror.Module = "dhcpserver"
+					exeerror.Data = "error applying " + dhcpconf
+					errors = append(errors, exeerror)
+					dhcpcmd["revert"].SendCmd(utils.GetArkConn())
+				}
 			}
 		}
 		if changes["snmpserver"] > 0 {

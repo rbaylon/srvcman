@@ -115,11 +115,10 @@ func GroupRouter(db groupmodel.Crud) chi.Router {
 			render.Render(w, r, utils.ErrInvalidRequest(err, fmt.Sprintf("Invalid group ID %s", chi.URLParam(r, "groupId")), http.StatusBadRequest))
 			return
 		}
+		// No render.Bind here, unlike the other modules': a DELETE carries no
+		// body worth validating, and Bind requires a groupname - which the empty body
+		// does not have, so binding it would reject every delete.
 		group := groupmodel.Group{}
-		if err = render.Bind(r, &group); err != nil {
-			render.Render(w, r, utils.ErrInvalidRequest(err, "Bind error", http.StatusBadRequest))
-			return
-		}
 		group.ID = uint(id)
 		err = db.Delete(&group)
 		if err == nil {
